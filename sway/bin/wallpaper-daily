@@ -1,4 +1,5 @@
 #!/bin/bash
+# Version 1.0, 2026-10-30, dominik@hudzik.info
 # Daily wallpaper from a folder: one picture per day, in file-name order, cycling.
 # Started by exec_always in the Sway config; checks hourly so a sleeping laptop catches up.
 DIR="$HOME/Pictures/wallpapers"

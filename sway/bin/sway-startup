@@ -1,4 +1,5 @@
 #!/bin/bash
+# Version 1.0, 2026-10-30, dominik@hudzik.info
 # Login: restore the saved session. Layout, folders and apps come from ~/.config/sway/workspaces.map
 # (written by `sway-save`, listed with `ws-open l`).
 ~/.local/bin/ws-open all

@@ -1,4 +1,5 @@
 #!/bin/bash
+# Version 1.0, 2026-10-30, dominik@hudzik.info
 # Swap the focused window with the next tiled window on the same workspace; focus stays on the screen position.
 ids=$(swaymsg -t get_tree | jq -r '[.. | select(.type?=="workspace" and ([.. | select(.focused?==true)] | length > 0))
   | [.. | select(.pid? and .type=="con")] | .[].id] | @tsv')

@@ -1,4 +1,5 @@
 #!/bin/bash
+# Version 1.0, 2026-10-30, dominik@hudzik.info
 # Waybar: "<percent>% <minutes left>" while on battery, nothing while charging
 b=$(upower -e | grep -i bat | head -1)
 i=$(upower -i "$b")

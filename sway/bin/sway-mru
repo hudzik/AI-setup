@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Version 1.0, 2026-10-30, dominik@hudzik.info
 """Most-recently-used window switching for Sway.
 sway-mru daemon  - track focus order in $XDG_RUNTIME_DIR/sway-mru.json
 sway-mru switch  - focus the previously active window

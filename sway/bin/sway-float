@@ -1,4 +1,5 @@
 #!/bin/bash
+# Version 1.0, 2026-10-30, dominik@hudzik.info
 # Mod+Shift+space: tiled -> floating at 70% x 70% of the screen, centred; floating -> tiled again.
 if swaymsg -t get_tree | jq -e '.. | objects | select(.focused==true) | select(.type=="floating_con")' >/dev/null; then
   swaymsg floating disable >/dev/null

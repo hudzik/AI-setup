@@ -1,4 +1,5 @@
 #!/bin/bash
+# Version 1.0, 2026-10-30, dominik@hudzik.info
 # Pick an open window in fuzzel and focus it (Sway). Digits inside app names and titles are shown full-width,
 # so typing a digit matches only the workspace number at the start of a line.
 sel=$(swaymsg -t get_tree | jq -r 'def fw: explode | map(if . >= 48 and . <= 57 then . + 65248 else . end) | implode; [.nodes[].nodes[] | select(.type=="workspace") as $ws | $ws | .. | select(.pid? and .visible != null and (.app_id // .window_properties.class) != null) | {id, w: ($ws.num // 99), t: "\($ws.num // "s") | \((.app_id // .window_properties.class) | fw) | \(.name | fw)"}] | sort_by(.w) | .[] | "\(.id)\t\(.t)"' | fuzzel --dmenu --match-mode=exact --width 80 --with-nth=2 --accept-nth=1 --prompt 'window> ')

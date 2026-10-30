@@ -1,5 +1,7 @@
 # My Sway setup: session restore, workspace history, a few small scripts
 
+**Version 1.0, 2026-10-30.** Author contact: dominik@hudzik.info
+
 Sharing the config and helper scripts I have built up on a laptop (Debian 13, Sway 1.10, one external monitor). Everything is plain bash or Python plus `swaymsg` and `jq`. Config and scripts are linked at the bottom. Take what is useful, tell me what you would do differently.
 
 ## What it is built around
@@ -100,4 +102,4 @@ Config and scripts are one folder: `config/sway-config`, `config/waybar-config`,
 
 Dependencies (Debian package names where I know them): sway, swayidle, swaylock, swaynag (comes with sway), foot, fuzzel, waybar, mako-notifier, jq, python3, psmisc (pstree), procps (pgrep), upower, grim, slurp, wl-clipboard, cliphist, wlsunset, brightnessctl, playerctl, wireplumber (wpctl), network-manager (nmcli, nmtui), libnotify-bin (notify-send), yad, autotiling (pip or a package), thunar, firefox, neovim, policykit-1-gnome, gnome-keyring, network-manager-gnome (nm-applet), blueman.
 
-The config has no personal data in it, but before you use it: delete the `output` lines for ports you do not have (`swaymsg -t get_outputs`), set your keyboard layout and put your own coordinates in the wlsunset line (the ones there are a placeholder). The polkit path is the Debian one. The scripts are tested on my machine only; read them before you bind them to keys.
+The files contain no personal data except the contact line above, but before you use them: delete the `output` lines for ports you do not have (`swaymsg -t get_outputs`), set your keyboard layout and put your own coordinates in the wlsunset line (the ones there are a placeholder). The polkit path is the Debian one. The scripts are tested on my machine only; read them before you bind them to keys.

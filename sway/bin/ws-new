@@ -1,4 +1,5 @@
 #!/bin/bash
+# Version 1.0, 2026-10-30, dominik@hudzik.info
 # ws-new [N [DIR]]: switch to workspace N, named "N: <dir name>", and start Neovim in DIR.
 # DIR: absolute, ~/..., or a name under ~/c. With no arguments it asks for N (fuzzel), then shows a pop-up
 # with the dir last used for N (workspaces.history, however long ago) to accept or change.

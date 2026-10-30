@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Version 1.0, 2026-10-30, dominik@hudzik.info
 # External monitor connected -> laptop panel (eDP-1) off; none -> panel on.
 # "sway-outputs" applies once; "sway-outputs daemon" also follows hotplug events.
 # Acts only when the state differs: a swaymsg that changes nothing still fires an

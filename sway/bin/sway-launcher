@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Version 1.0, 2026-10-30, dominik@hudzik.info
 """App launcher for Sway: fuzzel list ordered by last launch (most recent first)."""
 import configparser, glob, os, re, subprocess
 

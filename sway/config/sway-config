@@ -1,3 +1,4 @@
+# Version 1.0, 2026-10-30, dominik@hudzik.info
 # Sway config for a laptop with one external monitor (Debian 13, Sway 1.10).
 # Reload after edits: Mod+Shift+c.  Full reference: man 5 sway
 # Helper scripts live in ~/.local/bin (see ../bin). Sway's PATH has no ~/.local/bin, so every call uses the full path.

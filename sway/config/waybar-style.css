@@ -1,3 +1,4 @@
+/* Version 1.0, 2026-10-30, dominik@hudzik.info */
 * { font-family: "Noto Sans"; font-size: 13px; }
 window#waybar { background: #1e1e2e; color: #cdd6f4; }
 #workspaces button { padding: 0 8px; color: #a6adc8; background: transparent; border: none; border-radius: 0; }
