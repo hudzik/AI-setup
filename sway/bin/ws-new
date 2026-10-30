@@ -1,0 +1,42 @@
+#!/bin/bash
+# ws-new [N [DIR]]: switch to workspace N, named "N: <dir name>", and start Neovim in DIR.
+# DIR: absolute, ~/..., or a name under ~/c. With no arguments it asks for N (fuzzel), then shows a pop-up
+# with the dir last used for N (workspaces.history, however long ago) to accept or change.
+# A dir that does not exist: the pop-up asks to create it, or abort.
+map=$HOME/.config/sway/workspaces.map
+hist=$HOME/.config/sway/workspaces.history # every workspace dir ever saved by sway-save: num, dir, date
+interactive=
+if [ $# -eq 0 ]; then
+  # list every number ever used (workspaces.history) plus 1-10: number, * = has windows now, dir last used, date
+  open=$(swaymsg -t get_tree | jq -r '.nodes[].nodes[]? | select(.type=="workspace" and .num>0) | select([.. | objects | select(has("pid") and .pid != null)] | length > 0) | .num')
+  n=$( { cat "$hist" 2>/dev/null; seq 10 | awk '{print $1 "\t\t"}'; } | sort -t$'\t' -k1,1n -k2,2r | awk -F'\t' '!s[$1]++' |
+       while IFS=$'\t' read -r i dd dt; do
+         printf '%-3s %-1s %-30s %s\n' "$i" "$(grep -qx "$i" <<<"$open" && echo '*')" "${dd/#$HOME/\~}" "$dt"
+       done | fuzzel --dmenu --prompt 'workspace number> ' --lines 12 --width 56) || exit 0
+  n=${n%% *}; d=; interactive=1
+else n=$1; d=$2; fi
+[[ $n =~ ^[0-9]+$ ]] || { echo "usage: ws-new [N [DIR]]" >&2; notify-send "ws-new" "not a workspace number: $n"; exit 1; }
+if [ -n "$interactive" ]; then
+  sug=$(awk -F'\t' -v n="$n" '$1==n {print $2; exit}' "$hist" 2>/dev/null)
+  d=$(yad --entry --title "workspace $n" --text "Dir for workspace $n${sug:+ (saved: $sug)}:" \
+        --entry-text "${sug:-$HOME/c/}" --width 500 --center --on-top --button=gtk-cancel:1 --button=gtk-ok:0) || exit 0
+  d=${d//[$'\r\n']}
+fi
+[ -n "$d" ] || { notify-send "ws-new" "no dir given"; exit 1; }
+d=${d/#\~/$HOME}
+[ -d "$d" ] || { [[ $d != /* ]] && [ -d "$HOME/c/$d" ] && d=$HOME/c/$d; }
+if [ ! -d "$d" ]; then
+  [[ $d != /* ]] && d=$HOME/c/$d
+  if [ -n "$interactive" ]; then
+    yad --question --title "workspace $n" --text "$d does not exist. Create it?" \
+        --center --on-top --button="Abort:1" --button="Create:0" || exit 0
+    mkdir -p "$d" || { notify-send "ws-new" "cannot create $d"; exit 1; }
+  else notify-send "ws-new" "no such dir: $d"; exit 1; fi
+fi
+d=$(realpath "$d")
+[[ $d =~ ^[A-Za-z0-9._/+@%:=~-]+$ ]] || { notify-send "ws-new" "folder name has characters that are not allowed (letters, digits and . _ / + @ % : = ~ - only)"; exit 1; }
+new="$n: $(basename "$d")"
+old=$(swaymsg -t get_workspaces | jq -r --argjson n "$n" '.[] | select(.num==$n) | .name')
+[ -n "$old" ] && [ "$old" != "$new" ] && swaymsg "rename workspace \"$old\" to \"$new\"" >/dev/null
+swaymsg "workspace \"$new\"" >/dev/null
+exec foot --working-directory="$d" env PATH=$HOME/.local/bin:$PATH nvim

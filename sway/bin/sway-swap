@@ -1,0 +1,10 @@
+#!/bin/bash
+# Swap the focused window with the next tiled window on the same workspace; focus stays on the screen position.
+ids=$(swaymsg -t get_tree | jq -r '[.. | select(.type?=="workspace" and ([.. | select(.focused?==true)] | length > 0))
+  | [.. | select(.pid? and .type=="con")] | .[].id] | @tsv')
+cur=$(swaymsg -t get_tree | jq -r '.. | select(.focused?==true) | .id' | head -1)
+read -ra a <<<"$ids"
+n=${#a[@]}; [ "$n" -lt 2 ] && exit 0
+for i in "${!a[@]}"; do [ "${a[$i]}" = "$cur" ] && other=${a[$(( (i+1) % n ))]}; done
+swaymsg "swap container with con_id $other" >/dev/null
+swaymsg "[con_id=$other] focus" >/dev/null

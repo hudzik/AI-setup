@@ -1,0 +1,48 @@
+#!/bin/bash
+# Save open windows per workspace to ~/.config/sway/workspaces.map:
+#   num  kind  dir  col  row  width%      (columns left to right, rows top to bottom; width of the column in % of the workspace)
+# kinds: editor = foot with nvim, term = plain foot, vivaldi, firefox. Restore: ws-open N | ws-open all | ws-open l.
+# The map holds only the workspaces open at save time (restore opens just those). Every workspace dir ever saved goes to
+#   ~/.config/sway/workspaces.history (num, dir, date; newest dir per number, never pruned), which Mod+Shift+n (ws-new) lists.
+# Only column layouts (columns of stacked windows) are saved, not arbitrary nested trees.
+map=${WSMAP:-$HOME/.config/sway/workspaces.map}
+tmp=$(mktemp)
+leaf() { # cwd source: first nvim below the pid, else its first child (the shell), else the pid itself
+  local p=$1 n
+  n=$(pstree -p "$p" 2>/dev/null | grep -o 'nvim([0-9]*)' | head -1 | tr -dc 0-9)
+  [ -n "$n" ] && { echo "$n"; return; }
+  n=$(pgrep -P "$p" | head -1)
+  echo "${n:-$p}"
+}
+has_nvim() { pstree -p "$1" 2>/dev/null | grep -q 'nvim('; }
+swaymsg -t get_tree | jq -r '
+  .nodes[].nodes[]? | select(.type=="workspace" and .num>0) | . as $ws
+  | [.. | objects | select(has("pid") and .pid != null and (.nodes|length)==0 and (.floating_nodes|length)==0)]
+  | .[] | "\($ws.num) \(.app_id // .window_properties.class // "?") \(.pid) \(.rect.x) \(.rect.y) \(.rect.width) \($ws.rect.width)"' |
+while read -r n app pid x y w ww; do
+  case $app in
+    foot) d=$(readlink "/proc/$(leaf "$pid")/cwd")
+          [[ $d =~ ^[A-Za-z0-9._/+@%:=~-]+$ ]] || { echo "skipped (unsafe folder name, see ws-open): $d" >&2; continue; }
+          if has_nvim "$pid"; then k=editor; else k=term; fi ;;
+    vivaldi-stable) k=vivaldi; d=- ;;
+    firefox) k=firefox; d=- ;;
+    *) continue ;;
+  esac
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$n" "$k" "$d" "$x" "$y" "$w" "$ww"
+done | sort -t$'\t' -k1,1n -k4,4n -k5,5n -u |
+awk -F'\t' -v OFS='\t' '
+  $1 != pn { col = 0; px = -9999; pn = $1 }
+  { if ($4 - px > 5 || px - $4 > 5) { col++; row = 0; px = $4 }
+    row++; print $1, $2, $3, col, row, int(100 * $6 / $7 + 0.5) }' > "$tmp"
+[ -s "$tmp" ] || { echo "nothing found, map not changed"; rm -f "$tmp"; exit 1; }
+nopen=$(cut -f1 "$tmp" | sort -nu | wc -l)
+[ -f "$map" ] && cp "$map" "$map.prev"
+hist=${WSHIST:-$HOME/.config/sway/workspaces.history}
+[ -f "$hist" ] || { [ -f "$map.prev" ] && awk -F'\t' -v d="$(date -r "$map.prev" +%F)" '$2=="editor" && !s[$1]++ {print $1 "\t" $3 "\t" d}' "$map.prev" > "$hist"; } # first run: seed from the old map
+touch "$hist"
+today=$(date +%F)
+{ awk -F'\t' -v d="$today" '$2=="editor" && !s[$1]++ {print $1 "\t" $3 "\t" d}' "$tmp"
+  awk -F'\t' 'NR==FNR { if ($2=="editor") seen[$1]=1; next } !($1 in seen)' "$tmp" "$hist"; } | sort -t$'\t' -k1,1n -s > "$hist.new" && mv "$hist.new" "$hist"
+mv "$tmp" "$map"
+echo "saved to $map:"; ws-open l
+notify-send "sway-save" "saved $nopen open workspaces (restore opens only these)"

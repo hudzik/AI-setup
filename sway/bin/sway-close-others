@@ -1,0 +1,14 @@
+#!/bin/bash
+# Close every window on all workspaces except the focused one.
+cur=$(swaymsg -t get_workspaces | python3 -c 'import json,sys; print([w["name"] for w in json.load(sys.stdin) if w["focused"]][0])')
+swaymsg -t get_tree | python3 -c '
+import json,sys
+cur=sys.argv[1]
+def walk(n,ws):
+    if n["type"]=="workspace": ws=n["name"]
+    if n["type"] in ("con","floating_con") and n.get("pid") and not n["nodes"] and ws not in (None,cur,"__i3_scratch"):
+        print(n["id"])
+    for c in n["nodes"]+n.get("floating_nodes",[]): walk(c,ws)
+walk(json.load(sys.stdin),None)' "$cur" | while read -r id; do
+  swaymsg "[con_id=$id] kill" >/dev/null
+done

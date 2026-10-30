@@ -1,0 +1,20 @@
+#!/usr/bin/env python3
+# Flip horizontal/vertical for the focused window: toggles the nearest parent that holds 2+ windows
+# (a lone window in its own wrapper makes `layout toggle split` do nothing visible).
+import json, subprocess
+def sm(*a): return subprocess.run(["swaymsg", *a], capture_output=True, text=True).stdout
+tree = json.loads(sm("-t", "get_tree"))
+path = []
+def find(n, trail):
+    if n.get("focused"): return trail + [n]
+    for c in n.get("nodes", []) + n.get("floating_nodes", []):
+        r = find(c, trail + [n])
+        if r: return r
+path = find(tree, [])
+steps = None
+if path:
+    for up, anc in enumerate(reversed(path[:-1]), 1):
+        if anc["type"] == "workspace" or len(anc.get("nodes", [])) >= 2:
+            steps = up; break
+if steps:
+    sm(";".join(["focus parent"] * (steps - 1) + ["layout toggle split"] + ["focus child"] * (steps - 1)))

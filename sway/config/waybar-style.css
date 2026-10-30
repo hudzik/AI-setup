@@ -1,0 +1,5 @@
+* { font-family: "Noto Sans"; font-size: 13px; }
+window#waybar { background: #1e1e2e; color: #cdd6f4; }
+#workspaces button { padding: 0 8px; color: #a6adc8; background: transparent; border: none; border-radius: 0; }
+#workspaces button.focused { background: #cba6f7; color: #11111b; }
+#network, #battery, #cpu, #memory, #custom-clock { padding: 0 10px; }

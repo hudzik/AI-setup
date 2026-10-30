@@ -1,0 +1,485 @@
+# Sway config for a laptop with one external monitor (Debian 13, Sway 1.10).
+# Reload after edits: Mod+Shift+c.  Full reference: man 5 sway
+# Helper scripts live in ~/.local/bin (see ../bin). Sway's PATH has no ~/.local/bin, so every call uses the full path.
+
+### Basics
+set $mod Mod4
+set $left h
+set $down j
+set $up k
+set $right l
+set $term foot
+set $menu fuzzel
+set $lock swaylock -f -c 1e1e2e
+
+font pango:Noto Sans 10.5
+default_border pixel 2
+default_floating_border normal
+gaps inner 4
+focus_follows_mouse no
+
+### Monitors (Wayland names; check with: swaymsg -t get_outputs)
+# External monitor on HDMI. If the bottom of the screen jumps sideways again,
+# swap the mode line for the 50 Hz one below (needs fewer MHz on HDMI).
+output HDMI-A-1 mode 2560x1440@59.951Hz position 0 0
+# output HDMI-A-1 mode --custom 2560x1440@50Hz position 0 0
+# Same monitor over a USB-C cable (port name may be DP-1 or DP-2).
+output DP-1 mode 2560x1440@59.951Hz position 0 0
+output DP-2 mode 2560x1440@59.951Hz position 0 0
+# Laptop panel: only used when no external monitor is connected (sway-outputs
+# follows hotplug), and off while the lid is closed.
+output eDP-1 mode 1920x1080@60Hz position 0 0
+bindswitch --locked lid:on output eDP-1 disable
+bindswitch --locked lid:off exec ~/.local/bin/sway-outputs
+exec_always ~/.local/bin/sway-outputs daemon
+# Freeze processes of windows on workspace 9 while it is hidden.
+exec_always ~/.local/bin/sway-freeze
+
+# Daily wallpaper from a folder (see bin/wallpaper-daily). No `output * bg ...` line here on purpose:
+# a reload would re-apply it and wipe today's picture, because the script sets one only once a day.
+exec_always ~/.local/bin/wallpaper-daily
+# Evening colour warmth: set YOUR latitude / longitude
+exec_always sh -c 'pkill -x wlsunset; exec wlsunset -l 52.0 -L 13.0'
+
+# Catppuccin Mocha window borders
+client.focused          #b4befe #1e1e2e #cdd6f4 #f5e0dc #b4befe
+client.focused_inactive #6c7086 #1e1e2e #cdd6f4 #6c7086 #6c7086
+client.unfocused        #313244 #1e1e2e #a6adc8 #313244 #313244
+client.urgent           #fab387 #1e1e2e #fab387 #fab387 #fab387
+
+### Keyboard, mouse, touchscreen
+input type:keyboard {
+    xkb_layout us
+    xkb_options terminate:ctrl_alt_bksp
+    repeat_delay 300
+    repeat_rate 35
+}
+input type:touchpad {
+    tap enabled
+    natural_scroll disabled
+    dwt enabled
+}
+# Touchscreen follows the laptop panel, not the big monitor.
+input type:touch map_to_output eDP-1
+
+### Idle: screens off after 10 min (no auto lock; Ctrl+Alt+l locks by hand)
+# While blank, mode "blank" eats the first key or mouse click: it only wakes the screen and goes nowhere else
+exec swayidle -w \
+    timeout 600 'swaymsg "mode blank; output * power off"' resume 'swaymsg "output * power on; mode default"'
+mode "blank" {
+    bindcode 9 mode "default"; output * power on
+    bindcode 10 mode "default"; output * power on
+    bindcode 11 mode "default"; output * power on
+    bindcode 12 mode "default"; output * power on
+    bindcode 13 mode "default"; output * power on
+    bindcode 14 mode "default"; output * power on
+    bindcode 15 mode "default"; output * power on
+    bindcode 16 mode "default"; output * power on
+    bindcode 17 mode "default"; output * power on
+    bindcode 18 mode "default"; output * power on
+    bindcode 19 mode "default"; output * power on
+    bindcode 20 mode "default"; output * power on
+    bindcode 21 mode "default"; output * power on
+    bindcode 22 mode "default"; output * power on
+    bindcode 23 mode "default"; output * power on
+    bindcode 24 mode "default"; output * power on
+    bindcode 25 mode "default"; output * power on
+    bindcode 26 mode "default"; output * power on
+    bindcode 27 mode "default"; output * power on
+    bindcode 28 mode "default"; output * power on
+    bindcode 29 mode "default"; output * power on
+    bindcode 30 mode "default"; output * power on
+    bindcode 31 mode "default"; output * power on
+    bindcode 32 mode "default"; output * power on
+    bindcode 33 mode "default"; output * power on
+    bindcode 34 mode "default"; output * power on
+    bindcode 35 mode "default"; output * power on
+    bindcode 36 mode "default"; output * power on
+    bindcode 37 mode "default"; output * power on
+    bindcode 38 mode "default"; output * power on
+    bindcode 39 mode "default"; output * power on
+    bindcode 40 mode "default"; output * power on
+    bindcode 41 mode "default"; output * power on
+    bindcode 42 mode "default"; output * power on
+    bindcode 43 mode "default"; output * power on
+    bindcode 44 mode "default"; output * power on
+    bindcode 45 mode "default"; output * power on
+    bindcode 46 mode "default"; output * power on
+    bindcode 47 mode "default"; output * power on
+    bindcode 48 mode "default"; output * power on
+    bindcode 49 mode "default"; output * power on
+    bindcode 50 mode "default"; output * power on
+    bindcode 51 mode "default"; output * power on
+    bindcode 52 mode "default"; output * power on
+    bindcode 53 mode "default"; output * power on
+    bindcode 54 mode "default"; output * power on
+    bindcode 55 mode "default"; output * power on
+    bindcode 56 mode "default"; output * power on
+    bindcode 57 mode "default"; output * power on
+    bindcode 58 mode "default"; output * power on
+    bindcode 59 mode "default"; output * power on
+    bindcode 60 mode "default"; output * power on
+    bindcode 61 mode "default"; output * power on
+    bindcode 62 mode "default"; output * power on
+    bindcode 63 mode "default"; output * power on
+    bindcode 64 mode "default"; output * power on
+    bindcode 65 mode "default"; output * power on
+    bindcode 66 mode "default"; output * power on
+    bindcode 67 mode "default"; output * power on
+    bindcode 68 mode "default"; output * power on
+    bindcode 69 mode "default"; output * power on
+    bindcode 70 mode "default"; output * power on
+    bindcode 71 mode "default"; output * power on
+    bindcode 72 mode "default"; output * power on
+    bindcode 73 mode "default"; output * power on
+    bindcode 74 mode "default"; output * power on
+    bindcode 75 mode "default"; output * power on
+    bindcode 76 mode "default"; output * power on
+    bindcode 77 mode "default"; output * power on
+    bindcode 78 mode "default"; output * power on
+    bindcode 79 mode "default"; output * power on
+    bindcode 80 mode "default"; output * power on
+    bindcode 81 mode "default"; output * power on
+    bindcode 82 mode "default"; output * power on
+    bindcode 83 mode "default"; output * power on
+    bindcode 84 mode "default"; output * power on
+    bindcode 85 mode "default"; output * power on
+    bindcode 86 mode "default"; output * power on
+    bindcode 87 mode "default"; output * power on
+    bindcode 88 mode "default"; output * power on
+    bindcode 89 mode "default"; output * power on
+    bindcode 90 mode "default"; output * power on
+    bindcode 91 mode "default"; output * power on
+    bindcode 92 mode "default"; output * power on
+    bindcode 93 mode "default"; output * power on
+    bindcode 94 mode "default"; output * power on
+    bindcode 95 mode "default"; output * power on
+    bindcode 96 mode "default"; output * power on
+    bindcode 97 mode "default"; output * power on
+    bindcode 98 mode "default"; output * power on
+    bindcode 99 mode "default"; output * power on
+    bindcode 100 mode "default"; output * power on
+    bindcode 101 mode "default"; output * power on
+    bindcode 102 mode "default"; output * power on
+    bindcode 103 mode "default"; output * power on
+    bindcode 104 mode "default"; output * power on
+    bindcode 105 mode "default"; output * power on
+    bindcode 106 mode "default"; output * power on
+    bindcode 107 mode "default"; output * power on
+    bindcode 108 mode "default"; output * power on
+    bindcode 109 mode "default"; output * power on
+    bindcode 110 mode "default"; output * power on
+    bindcode 111 mode "default"; output * power on
+    bindcode 112 mode "default"; output * power on
+    bindcode 113 mode "default"; output * power on
+    bindcode 114 mode "default"; output * power on
+    bindcode 115 mode "default"; output * power on
+    bindcode 116 mode "default"; output * power on
+    bindcode 117 mode "default"; output * power on
+    bindcode 118 mode "default"; output * power on
+    bindcode 119 mode "default"; output * power on
+    bindcode 120 mode "default"; output * power on
+    bindcode 121 mode "default"; output * power on
+    bindcode 122 mode "default"; output * power on
+    bindcode 123 mode "default"; output * power on
+    bindcode 124 mode "default"; output * power on
+    bindcode 125 mode "default"; output * power on
+    bindcode 126 mode "default"; output * power on
+    bindcode 127 mode "default"; output * power on
+    bindcode 128 mode "default"; output * power on
+    bindcode 129 mode "default"; output * power on
+    bindcode 130 mode "default"; output * power on
+    bindcode 131 mode "default"; output * power on
+    bindcode 132 mode "default"; output * power on
+    bindcode 133 mode "default"; output * power on
+    bindcode 134 mode "default"; output * power on
+    bindcode 135 mode "default"; output * power on
+    bindcode 136 mode "default"; output * power on
+    bindcode 137 mode "default"; output * power on
+    bindcode 138 mode "default"; output * power on
+    bindcode 139 mode "default"; output * power on
+    bindcode 140 mode "default"; output * power on
+    bindcode 141 mode "default"; output * power on
+    bindcode 142 mode "default"; output * power on
+    bindcode 143 mode "default"; output * power on
+    bindcode 144 mode "default"; output * power on
+    bindcode 145 mode "default"; output * power on
+    bindcode 146 mode "default"; output * power on
+    bindcode 147 mode "default"; output * power on
+    bindcode 148 mode "default"; output * power on
+    bindcode 149 mode "default"; output * power on
+    bindcode 150 mode "default"; output * power on
+    bindcode 151 mode "default"; output * power on
+    bindcode 152 mode "default"; output * power on
+    bindcode 153 mode "default"; output * power on
+    bindcode 154 mode "default"; output * power on
+    bindcode 155 mode "default"; output * power on
+    bindcode 156 mode "default"; output * power on
+    bindcode 157 mode "default"; output * power on
+    bindcode 158 mode "default"; output * power on
+    bindcode 159 mode "default"; output * power on
+    bindcode 160 mode "default"; output * power on
+    bindcode 161 mode "default"; output * power on
+    bindcode 162 mode "default"; output * power on
+    bindcode 163 mode "default"; output * power on
+    bindcode 164 mode "default"; output * power on
+    bindcode 165 mode "default"; output * power on
+    bindcode 166 mode "default"; output * power on
+    bindcode 167 mode "default"; output * power on
+    bindcode 168 mode "default"; output * power on
+    bindcode 169 mode "default"; output * power on
+    bindcode 170 mode "default"; output * power on
+    bindcode 171 mode "default"; output * power on
+    bindcode 172 mode "default"; output * power on
+    bindcode 173 mode "default"; output * power on
+    bindcode 174 mode "default"; output * power on
+    bindcode 175 mode "default"; output * power on
+    bindcode 176 mode "default"; output * power on
+    bindcode 177 mode "default"; output * power on
+    bindcode 178 mode "default"; output * power on
+    bindcode 179 mode "default"; output * power on
+    bindcode 180 mode "default"; output * power on
+    bindcode 181 mode "default"; output * power on
+    bindcode 182 mode "default"; output * power on
+    bindcode 183 mode "default"; output * power on
+    bindcode 184 mode "default"; output * power on
+    bindcode 185 mode "default"; output * power on
+    bindcode 186 mode "default"; output * power on
+    bindcode 187 mode "default"; output * power on
+    bindcode 188 mode "default"; output * power on
+    bindcode 189 mode "default"; output * power on
+    bindcode 190 mode "default"; output * power on
+    bindcode 191 mode "default"; output * power on
+    bindcode 192 mode "default"; output * power on
+    bindcode 193 mode "default"; output * power on
+    bindcode 194 mode "default"; output * power on
+    bindcode 195 mode "default"; output * power on
+    bindcode 196 mode "default"; output * power on
+    bindcode 197 mode "default"; output * power on
+    bindcode 198 mode "default"; output * power on
+    bindcode 199 mode "default"; output * power on
+    bindcode 200 mode "default"; output * power on
+    bindcode 201 mode "default"; output * power on
+    bindcode 202 mode "default"; output * power on
+    bindcode 203 mode "default"; output * power on
+    bindcode 204 mode "default"; output * power on
+    bindcode 205 mode "default"; output * power on
+    bindcode 206 mode "default"; output * power on
+    bindcode 207 mode "default"; output * power on
+    bindcode 208 mode "default"; output * power on
+    bindcode 209 mode "default"; output * power on
+    bindcode 210 mode "default"; output * power on
+    bindcode 211 mode "default"; output * power on
+    bindcode 212 mode "default"; output * power on
+    bindcode 213 mode "default"; output * power on
+    bindcode 214 mode "default"; output * power on
+    bindcode 215 mode "default"; output * power on
+    bindcode 216 mode "default"; output * power on
+    bindcode 217 mode "default"; output * power on
+    bindcode 218 mode "default"; output * power on
+    bindcode 219 mode "default"; output * power on
+    bindcode 220 mode "default"; output * power on
+    bindcode 221 mode "default"; output * power on
+    bindcode 222 mode "default"; output * power on
+    bindcode 223 mode "default"; output * power on
+    bindcode 224 mode "default"; output * power on
+    bindcode 225 mode "default"; output * power on
+    bindcode 226 mode "default"; output * power on
+    bindcode 227 mode "default"; output * power on
+    bindcode 228 mode "default"; output * power on
+    bindcode 229 mode "default"; output * power on
+    bindcode 230 mode "default"; output * power on
+    bindcode 231 mode "default"; output * power on
+    bindcode 232 mode "default"; output * power on
+    bindcode 233 mode "default"; output * power on
+    bindcode 234 mode "default"; output * power on
+    bindcode 235 mode "default"; output * power on
+    bindcode 236 mode "default"; output * power on
+    bindcode 237 mode "default"; output * power on
+    bindcode 238 mode "default"; output * power on
+    bindcode 239 mode "default"; output * power on
+    bindcode 240 mode "default"; output * power on
+    bindcode 241 mode "default"; output * power on
+    bindcode 242 mode "default"; output * power on
+    bindcode 243 mode "default"; output * power on
+    bindcode 244 mode "default"; output * power on
+    bindcode 245 mode "default"; output * power on
+    bindcode 246 mode "default"; output * power on
+    bindcode 247 mode "default"; output * power on
+    bindcode 248 mode "default"; output * power on
+    bindcode 249 mode "default"; output * power on
+    bindcode 250 mode "default"; output * power on
+    bindcode 251 mode "default"; output * power on
+    bindcode 252 mode "default"; output * power on
+    bindcode 253 mode "default"; output * power on
+    bindcode 254 mode "default"; output * power on
+    bindcode 255 mode "default"; output * power on
+    bindsym --whole-window button1 mode "default"; output * power on
+    bindsym --whole-window button2 mode "default"; output * power on
+    bindsym --whole-window button3 mode "default"; output * power on
+}
+
+### Autostart (what XFCE started for you)
+exec /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1
+exec /usr/bin/gnome-keyring-daemon --start --components=secrets
+exec nm-applet --indicator
+exec blueman-applet
+exec mako
+# Clipboard history (replaces Clipman): text and images, picked with Ctrl+Alt+v
+exec wl-paste --type text --watch cliphist store
+exec wl-paste --type image --watch cliphist store
+# Screen sharing in Vivaldi/Firefox (xdg-desktop-portal-wlr) needs these.
+exec dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=sway
+exec systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
+
+### Apps
+bindsym $mod+Return exec $term
+bindsym $mod+Shift+f exec firefox --new-window
+bindsym $mod+b exec ~/.local/bin/sway-launcher --exact
+bindsym $mod+v exec ~/.local/bin/sway-launcher --exact --recent
+bindsym $mod+n exec thunar
+# Wi-Fi: pick a network in a small floating terminal (nmtui)
+bindsym $mod+Shift+w exec $term --title=wifi sh -c "nmcli dev wifi rescan; sleep 3; nmtui-connect"
+for_window [title="^wifi$"] floating enable, resize set 700 500
+bindsym $mod+Shift+q kill
+# No confirmation. Ctrl+Shift+q is also Quit in Firefox/Chromium: the compositor takes it first.
+bindsym Ctrl+Shift+q exec ~/.local/bin/sway-close-others
+bindsym $mod+Shift+n exec ~/.local/bin/ws-new
+bindsym $mod+Shift+s exec ~/.local/bin/sway-save
+bindsym Ctrl+Alt+l exec $lock
+bindsym Ctrl+Alt+v exec cliphist list | fuzzel --dmenu --width 70 | cliphist decode | wl-copy
+bindsym Ctrl+Alt+Shift+v exec cliphist list | fuzzel --dmenu --width 70 --prompt 'delete> ' | cliphist delete
+
+# Screenshots (saved to ~/Pictures, also copied to the clipboard)
+bindsym Print exec grim ~/Pictures/shot-$(date +%F-%H%M%S).png
+bindsym Shift+Print exec grim -g "$(slurp)" - | tee ~/Pictures/shot-$(date +%F-%H%M%S).png | wl-copy -t image/png
+
+# Volume, brightness, media keys
+bindsym XF86AudioRaiseVolume exec wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+
+bindsym XF86AudioLowerVolume exec wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-
+bindsym XF86AudioMute exec wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle
+bindsym XF86AudioMicMute exec wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle
+bindsym XF86MonBrightnessUp exec brightnessctl set 5%+
+bindsym XF86MonBrightnessDown exec brightnessctl set 5%-
+bindsym XF86AudioPlay exec playerctl play-pause
+bindsym XF86AudioNext exec playerctl next
+bindsym XF86AudioPrev exec playerctl previous
+
+### Session
+bindsym $mod+Shift+c reload
+bindsym $mod+Shift+e exec swaynag -t warning -m 'Log out of Sway?' -B 'Yes, log out' 'swaymsg exit'
+floating_modifier $mod normal
+
+### Moving around (vim keys, arrows also work)
+bindsym $mod+$left focus left
+bindsym $mod+$down focus down
+bindsym $mod+$up focus up
+bindsym $mod+$right focus right
+# Mod+arrows switch workspace: Left/Right = previous/next, Up = first, Down = last. Focus stays on Mod+h j k l.
+bindsym $mod+Left workspace prev
+bindsym $mod+Right workspace next
+bindsym $mod+Up exec ~/.local/bin/ws-edge first
+bindsym $mod+Down exec ~/.local/bin/ws-edge last
+
+bindsym $mod+Shift+$left move left
+bindsym $mod+Shift+$down move down
+bindsym $mod+Shift+$up move up
+bindsym $mod+Shift+$right move right
+bindsym $mod+Shift+Left move left
+bindsym $mod+Shift+Down move down
+bindsym $mod+Shift+Up move up
+bindsym $mod+Shift+Right move right
+
+### Workspaces
+### Workspace names : the number stays first, so "workspace number N" and scripts that match by number keep working
+set $ws1 "1: main"
+set $ws2 "2: web"
+set $ws3 "3: work"
+set $ws4 "4: dev"
+set $ws5 "5: docs"
+set $ws6 "6"
+set $ws7 "7: mail"
+set $ws8 "8: media"
+set $ws9 "9"
+set $ws10 "10"
+bindsym $mod+1 workspace number $ws1; exec ~/.local/bin/ws-open 1
+bindsym $mod+2 workspace number $ws2; exec ~/.local/bin/ws-open 2
+bindsym $mod+3 workspace number $ws3; exec ~/.local/bin/ws-open 3
+bindsym $mod+4 workspace number $ws4; exec ~/.local/bin/ws-open 4
+bindsym $mod+5 workspace number $ws5; exec ~/.local/bin/ws-open 5
+bindsym $mod+6 workspace number $ws6; exec ~/.local/bin/ws-open 6
+bindsym $mod+7 workspace number $ws7; exec ~/.local/bin/ws-open 7
+bindsym $mod+8 workspace number $ws8; exec ~/.local/bin/ws-open 8
+bindsym $mod+9 workspace number $ws9; exec ~/.local/bin/ws-open 9
+bindsym $mod+0 workspace number $ws10; exec ~/.local/bin/ws-open 10
+bindsym $mod+Shift+1 move container to workspace number $ws1
+bindsym $mod+Shift+2 move container to workspace number $ws2
+bindsym $mod+Shift+3 move container to workspace number $ws3
+bindsym $mod+Shift+4 move container to workspace number $ws4
+bindsym $mod+Shift+5 move container to workspace number $ws5
+bindsym $mod+Shift+6 move container to workspace number $ws6
+bindsym $mod+Shift+7 move container to workspace number $ws7
+bindsym $mod+Shift+8 move container to workspace number $ws8
+bindsym $mod+Shift+9 move container to workspace number $ws9
+bindsym $mod+Shift+0 move container to workspace number $ws10
+bindsym $mod+Tab workspace back_and_forth
+bindsym $mod+Ctrl+Left workspace prev
+bindsym $mod+Ctrl+Right workspace next
+exec ~/.local/bin/sway-mru daemon
+bindsym Mod1+Tab exec ~/.local/bin/sway-mru switch
+bindsym Mod1+Shift+Tab exec ~/.local/bin/sway-windows
+bindsym $mod+Shift+Tab exec ~/.local/bin/sway-windows
+bindsym $mod+Shift+ISO_Left_Tab exec ~/.local/bin/sway-windows
+bindsym Mod1+Shift+ISO_Left_Tab exec ~/.local/bin/sway-windows
+
+
+
+### Layout
+bindsym $mod+Ctrl+v splitv
+bindsym $mod+Shift+v splith
+bindsym $mod+s layout stacking
+bindsym $mod+w layout tabbed
+bindsym $mod+e exec ~/.local/bin/sway-flip
+bindsym $mod+f fullscreen
+bindsym $mod+Shift+space exec ~/.local/bin/sway-float
+bindsym $mod+space focus mode_toggle
+bindsym $mod+a focus parent
+
+# Dialogs and pop-ups float
+for_window [window_role="pop-up"] floating enable
+for_window [window_role="dialog"] floating enable
+for_window [app_id="blueman-manager"] floating enable
+for_window [app_id="nm-connection-editor"] floating enable
+for_window [app_id="pavucontrol"] floating enable
+
+### Scratchpad: a hidden window you can pop up anywhere
+bindsym $mod+Shift+minus move scratchpad
+bindsym $mod+minus scratchpad show
+
+### Resize mode (Mod+r, then h j k l, Esc to leave)
+mode "resize" {
+    bindsym $left resize shrink width 20px
+    bindsym $down resize grow height 20px
+    bindsym $up resize shrink height 20px
+    bindsym $right resize grow width 20px
+    bindsym Left resize shrink width 20px
+    bindsym Down resize grow height 20px
+    bindsym Up resize shrink height 20px
+    bindsym Right resize grow width 20px
+    bindsym Return mode "default"
+    bindsym Escape mode "default"
+}
+bindsym $mod+r mode "resize"
+
+### Status bar: waybar (config in ~/.config/waybar)
+exec_always sh -c 'pkill -x waybar; exec waybar'
+
+include /etc/sway/config.d/*
+
+exec ~/.local/bin/sway-startup
+
+bindsym $mod+x exec ~/.local/bin/sway-swap
+
+
+# autotiling: alternates split direction for new windows. `exec`, not exec_always: a reload would start a second copy.
+exec autotiling

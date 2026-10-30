@@ -1,0 +1,41 @@
+{
+  "layer": "top",
+  "position": "top",
+  "height": 28,
+  "modules-left": [
+    "sway/workspaces",
+    "sway/mode"
+  ],
+  "modules-center": [
+    "custom/clock"
+  ],
+  "modules-right": [
+    "cpu",
+    "memory",
+    "network",
+    "custom/battery"
+  ],
+  "custom/battery": {
+    "exec": "~/.local/bin/bat-min",
+    "interval": 300
+  },
+  "network": {
+    "format-wifi": "wifi",
+    "format-ethernet": "eth",
+    "format-disconnected": "no net",
+    "tooltip": false,
+    "on-click": "foot --title=wifi nmtui-connect"
+  },
+  "custom/clock": {
+    "exec": "date '+%a %d.%m  %-H:%M'",
+    "interval": 5
+  },
+  "cpu": {
+    "format": "{usage}% cpu",
+    "interval": 3
+  },
+  "memory": {
+    "format": "{used:0.1f} GB",
+    "interval": 3
+  }
+}

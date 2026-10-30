@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# External monitor connected -> laptop panel (eDP-1) off; none -> panel on.
+# "sway-outputs" applies once; "sway-outputs daemon" also follows hotplug events.
+# Acts only when the state differs: a swaymsg that changes nothing still fires an
+# output event, which made the daemon loop.
+apply() {
+    read -r ext panel < <(swaymsg -t get_outputs -r | python3 -c "
+import json,sys
+o=json.load(sys.stdin)
+print(sum(1 for x in o if not x['name'].startswith('eDP')), int(any(x['name']=='eDP-1' and x['active'] for x in o)))")
+    if [ "$ext" -gt 0 ] && [ "$panel" = 1 ]; then
+        echo "$(date +%T) external=$ext: eDP-1 off" >> ~/.local/state/sway-outputs.log
+        swaymsg output eDP-1 disable >/dev/null
+    elif [ "$ext" -eq 0 ] && [ "$panel" = 0 ]; then
+        echo "$(date +%T) external=0: eDP-1 on" >> ~/.local/state/sway-outputs.log
+        swaymsg output eDP-1 enable >/dev/null
+    fi
+}
+apply
+[ "$1" = daemon ] || exit 0
+pidf=${XDG_RUNTIME_DIR:-/tmp}/sway-outputs.pid
+[ -f "$pidf" ] && kill "$(cat "$pidf")" 2>/dev/null
+echo $$ > "$pidf"
+while read -r _; do sleep 1; apply; done < <(swaymsg -t subscribe -m '["output"]')

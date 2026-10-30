@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+"""Most-recently-used window switching for Sway.
+sway-mru daemon  - track focus order in $XDG_RUNTIME_DIR/sway-mru.json
+sway-mru switch  - focus the previously active window
+"""
+import json, os, subprocess, sys
+
+STATE = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "sway-mru.json")
+
+def load():
+    try:
+        return json.load(open(STATE))
+    except Exception:
+        return []
+
+def save(ids):
+    json.dump(ids[:30], open(STATE, "w"))
+
+def tree_ids():
+    tree = json.loads(subprocess.check_output(["swaymsg", "-t", "get_tree"]))
+    out, focused = set(), None
+    def walk(n):
+        nonlocal focused
+        if n.get("pid") and n.get("type") in ("con", "floating_con"):
+            out.add(n["id"])
+            if n.get("focused"):
+                focused = n["id"]
+        for c in n.get("nodes", []) + n.get("floating_nodes", []):
+            walk(c)
+    walk(tree)
+    return out, focused
+
+def daemon():
+    p = subprocess.Popen(["swaymsg", "-t", "subscribe", "-m", '["window"]'],
+                         stdout=subprocess.PIPE, text=True)
+    for line in p.stdout:
+        ev = json.loads(line)
+        cid = ev["container"]["id"]
+        ids = [i for i in load() if i != cid]
+        if ev["change"] == "focus":
+            ids.insert(0, cid)
+        save(ids)
+
+def switch():
+    alive, focused = tree_ids()
+    for i in load():
+        if i != focused and i in alive:
+            subprocess.run(["swaymsg", f"[con_id={i}] focus"], stdout=subprocess.DEVNULL)
+            return
+
+{"daemon": daemon, "switch": switch}[sys.argv[1]]()

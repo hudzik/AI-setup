@@ -1,0 +1,64 @@
+#!/bin/bash
+# ws-open N | all | l: start the apps listed for workspace N in ~/.config/sway/workspaces.map, only if N is empty.
+# l lists the map. DRY=1 prints instead of starting. Windows open on the focused workspace, so the key binding switches first.
+# Map columns: num kind dir col row width%. A new column opens to the right of the previous one; rows 2+ are split below.
+map=${WSMAP:-$HOME/.config/sway/workspaces.map}
+declare -A name=([1]="1: main" [2]="2: web" [3]="3: work" [4]="4: dev" [5]="5: docs" [6]="6" [7]="7: mail" [8]="8: media" [9]="9" [10]="10")
+sw() { if [ -n "$DRY" ]; then echo "swaymsg $*"; else swaymsg "$*" >/dev/null; fi; }
+ids() { swaymsg -t get_tree | jq -r --argjson n "$1" '.nodes[].nodes[]? | select(.type=="workspace" and .num==$n) | [.. | objects | select(has("pid") and .pid != null) | .id] | .[]'; }
+empty() { [ -z "$(ids "$1")" ]; }
+# Only plain folder names are launched: no spaces and none of ; , " ' \ $ ` & | < > ( ) * ? newline. Anything else is skipped,
+# because the command line goes through sway's own `sh -c`.
+safe_dir() { [[ $1 =~ ^[A-Za-z0-9._/+@%:=~-]+$ ]]; }
+launch() { # kind dir
+  if [ "$1" != vivaldi ] && [ "$1" != firefox ] && ! safe_dir "$2"; then notify-send "ws-open" "skipped unsafe folder name"; return 1; fi
+  case $1 in
+    editor) sw exec foot --working-directory="$2" env PATH=$HOME/.local/bin:\$PATH nvim ;;
+    term) sw exec foot --working-directory="$2" ;;
+    vivaldi) sw exec vivaldi --ozone-platform-hint=auto ;;
+    firefox) sw exec firefox --new-window ;;
+  esac
+}
+open_ws() {
+  local n=$1 num k d col row w pcol=0 prows=0 before new i
+  local -A first
+  empty "$n" || return 0
+  while IFS=$'\t' read -r num k d col row w; do
+    [ "$num" = "$n" ] || continue
+    if [ "$col" != "$pcol" ]; then
+      [ "$prows" -ge 2 ] && sw focus parent   # leave the stacked column, so the next window opens beside it
+    elif [ "$row" = 2 ]; then
+      sw splitv
+    fi
+    before=$(ids "$n")
+    launch "$k" "$d"
+    if [ -z "$DRY" ]; then # wait for the new window (max 20 s)
+      for i in $(seq 40); do
+        new=$(comm -13 <(sort <<<"$before") <(ids "$n" | sort) | head -1)
+        [ -n "$new" ] && break; sleep 0.5
+      done
+    fi
+    [ "$row" = 1 ] && first[$col]="$new:$w"
+    pcol=$col; prows=$row
+  done < "$map"
+  for col in "${!first[@]}"; do # column widths (the last column takes what is left)
+    [ "$col" = "${#first[@]}" ] && continue
+    sw "[con_id=${first[$col]%%:*}] resize set width ${first[$col]##*:} ppt"
+  done
+}
+[ -f "$map" ] || exit 0
+if [ "$1" = l ]; then # list saved workspaces: folders first, then apps; stacked rows marked with /
+  for n in $(cut -f1 "$map" | sort -nu); do
+    printf '%-11s' "${name[$n]}"
+    awk -F'\t' -v n="$n" '$1==n { if ($3 != "-") { sub(".*/", "", $3); d = d " /" $3 } a = a (($4 == pc) ? " /" : "  ") $2; pc = $4 } END { sub("^ ", "", d); sub("^ +", "", a); print d "  " a }' "$map"
+  done
+  exit 0
+fi
+if [ "$1" = all ]; then
+  for n in $(cut -f1 "$map" | sort -nu); do
+    [ -n "$DRY" ] || swaymsg "workspace \"${name[$n]}\"" >/dev/null
+    open_ws "$n"
+  done
+else
+  open_ws "$1"
+fi

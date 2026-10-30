@@ -1,0 +1,6 @@
+#!/bin/bash
+# ws-edge first|last: switch to the first or last existing workspace (by number). Used by Mod+Up / Mod+Down.
+swaymsg -t get_workspaces | python3 -c '
+import json,sys
+w=sorted(json.load(sys.stdin),key=lambda x:x["num"])
+print(w[0 if sys.argv[1]=="first" else -1]["name"])' "$1" | while read -r n; do swaymsg "workspace \"$n\"" >/dev/null; done

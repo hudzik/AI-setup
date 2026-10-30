@@ -1,0 +1,10 @@
+#!/bin/bash
+# Waybar: "<percent>% <minutes left>" while on battery, nothing while charging
+b=$(upower -e | grep -i bat | head -1)
+i=$(upower -i "$b")
+st=$(awk '/state:/{print $2}' <<<"$i")
+[ "$st" = discharging ] || exit 0
+pc=$(awk '/percentage:/{gsub("%","",$2);print $2}' <<<"$i")
+t=$(awk '/time to empty:/{print $4, $5}' <<<"$i")
+m=$(awk -v t="${t% *}" -v u="${t#* }" 'BEGIN{if(t=="")exit; if(u ~ /hour/) printf "%d", t*60+0.5; else if(u ~ /min/) printf "%d", t+0.5; else printf "%d", t*1440}')
+echo "${pc}% ${m}"

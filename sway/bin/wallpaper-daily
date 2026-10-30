@@ -1,0 +1,22 @@
+#!/bin/bash
+# Daily wallpaper from a folder: one picture per day, in file-name order, cycling.
+# Started by exec_always in the Sway config; checks hourly so a sleeping laptop catches up.
+DIR="$HOME/Pictures/wallpapers"
+STATE="$HOME/.local/state/wallpaper-daily.day"
+mkdir -p "$HOME/.local/state"
+exec 9>"$HOME/.local/state/wallpaper-daily.lock"
+flock -n 9 || exit 0
+while true; do
+  today=$(date +%F)
+  if [ "$(cat "$STATE" 2>/dev/null)" != "$today" ] || [ "$1" = "--now" ]; then
+    mapfile -t files < <(find "$DIR" -maxdepth 1 -type f ! -name '*"*' ! -name '*\\*' \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \) | sort)
+    n=${#files[@]}
+    if [ "$n" -gt 0 ]; then
+      idx=$(( ( $(date +%s) / 86400 ) % n ))
+      f=${files[$idx]}
+      swaymsg "output * bg \"$f\" fit #1e1e2e" >/dev/null && echo "$today" > "$STATE" && echo "$(date '+%F %T') $f" >> "$HOME/.local/state/wallpaper-daily.log"
+    fi
+  fi
+  [ "$1" = "--now" ] && exit 0
+  sleep 3600
+done
