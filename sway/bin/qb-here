@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# Version 1.1, 2026-11-25, dominik@hudzik.info
+# qb-here URL: show URL in the qutebrowser that belongs to the Sway workspace of
+# the terminal this command runs in (walks the parent process chain to a window).
+# One instance per workspace number, own folder ~/.local/share/qb-ws<N>
+# (config is a symlink to ~/.config/qutebrowser). DRY=1 prints the plan only.
+set -u
+url=${1:?usage: qb-here URL}
+
+tree() { swaymsg -t get_tree; }
+map=$(tree | python3 -I -c '
+import json,sys
+def w(n,ws=None):
+    if n.get("type")=="workspace": ws=n["name"]
+    if n.get("pid"): print(n["pid"], ws, sep="\t")
+    for c in n.get("nodes",[])+n.get("floating_nodes",[]): w(c,ws)
+w(json.load(sys.stdin))')
+ws=""; win=""; p=$$
+while [ "${p:-1}" -gt 1 ]; do
+  ws=$(awk -F'\t' -v p="$p" '$1==p{print $2; exit}' <<<"$map")
+  [ -n "$ws" ] && { win=$p; break; }
+  p=$(ps -o ppid= -p "$p" | tr -d ' ')
+done
+if [ -z "$ws" ]; then
+  ws=$(swaymsg -t get_workspaces | python3 -I -c 'import json,sys; print([w["name"] for w in json.load(sys.stdin) if w["focused"]][0])')
+fi
+num=${ws%%[:*]*}  # 2026-11-23: tile-rule writes "1* name" while a session waits; cut at ":" or "*"
+base=$HOME/.local/share/qb-ws$num
+
+if [ "${DRY:-0}" = 1 ]; then echo "workspace: $ws, folder: $base, url: $url"; exit 0; fi
+
+mkdir -p "$base"
+[ -e "$base/config" ] || ln -s "$HOME/.config/qutebrowser" "$base/config"
+
+# 2026-11-13: put the qb window to the right of the session's terminal (focus unchanged).
+# A plain "move container to workspace" makes it a sibling of the workspace's last-focused window,
+# inside that window's wrapper; autotiling sets that wrapper to splitv, so qb landed below foot.
+place() {
+  if [ -n "$win" ]; then
+    swaymsg "[pid=$win] splith; [pid=$win] mark --add qbdest$num; [pid=$1] move container to mark qbdest$num; unmark qbdest$num" >/dev/null 2>&1
+  else
+    swaymsg "[pid=$1] move container to workspace number $num" >/dev/null 2>&1
+  fi
+}
+# trailing space: qb-ws1 must not match qb-ws10 (prefix bug found 2026-11-10)
+running=$(pgrep -f "[q]utebrowser -B $base " | head -1)
+qutebrowser -B "$base" --target tab "$url" >/dev/null 2>&1 &
+qpid=$!
+if [ -z "$running" ]; then
+  # 2026-11-13: a NEW window must open on the session's workspace from the start, never flash on the
+  # focused one. A for_window rule for the new pid runs when the window maps, before it is shown. By number,
+  # not name: tile-rule renames workspaces to their folder.
+  if [ -n "$win" ]; then
+    swaymsg "[pid=$win] splith; [pid=$win] mark --add qbdest$num" >/dev/null 2>&1
+    swaymsg "for_window [pid=$qpid] move container to mark qbdest$num" >/dev/null 2>&1
+  else
+    swaymsg "for_window [pid=$qpid] move container to workspace number $num" >/dev/null 2>&1
+  fi
+fi
+if [ -n "$running" ]; then
+  # an old instance may sit on another workspace: bring its windows here; one already here is left alone
+  awk -F'\t' -v p="$running" -v w="$ws" '$1==p && $2==w{f=1} END{exit !f}' <<<"$map" || place "$running"
+  echo "sent to the qutebrowser of workspace: $ws"
+  exit 0
+fi
+for _ in $(seq 30); do
+  sleep 0.5
+  pid=$(pgrep -f "[q]utebrowser -B $base " | head -1)
+  [ -n "$pid" ] || continue
+  t=$(tree)
+  grep -q "\"pid\": $pid," <<<"$t" || continue
+  # the rule normally placed it already; place it only if it is not on this workspace (rule missed)
+  on=$(python3 -I -c '
+import json,sys
+p=int(sys.argv[1]); t=json.loads(sys.stdin.read())
+def w(n,num=None):
+    if n.get("type")=="workspace": num=n.get("num")
+    if n.get("pid")==p: print(num); raise SystemExit
+    for c in n.get("nodes",[])+n.get("floating_nodes",[]): w(c,num)
+w(t)' "$pid" <<<"$t")
+  [ "$on" = "$num" ] || place "$pid"
+  break
+done
+swaymsg "unmark qbdest$num" >/dev/null 2>&1
+echo "started a qutebrowser on workspace: $ws"

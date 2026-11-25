@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Version 1.0, 2026-10-30, dominik@hudzik.info
+# Version 1.1, 2026-11-25, dominik@hudzik.info
 # External monitor connected -> laptop panel (eDP-1) off; none -> panel on.
 # "sway-outputs" applies once; "sway-outputs daemon" also follows hotplug events.
 # Acts only when the state differs: a swaymsg that changes nothing still fires an
@@ -20,6 +20,6 @@ print(sum(1 for x in o if not x['name'].startswith('eDP')), int(any(x['name']=='
 apply
 [ "$1" = daemon ] || exit 0
 pidf=${XDG_RUNTIME_DIR:-/tmp}/sway-outputs.pid
-[ -f "$pidf" ] && kill "$(cat "$pidf")" 2>/dev/null
+[ -f "$pidf" ] && grep -q sway-outputs "/proc/$(cat "$pidf")/cmdline" 2>/dev/null && kill "$(cat "$pidf")" 2>/dev/null # only if the pid is still this script
 echo $$ > "$pidf"
 while read -r _; do sleep 1; apply; done < <(swaymsg -t subscribe -m '["output"]')

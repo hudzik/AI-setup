@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Version 1.1, 2026-11-25, dominik@hudzik.info
+# sp-pick: list windows hidden in the Sway scratchpad in fuzzel, show the chosen one.
+# Input: none. Output: the chosen window is shown (scratchpad show on its con_id).
+list=$(swaymsg -t get_tree | python3 -c '
+import json,sys
+t=json.load(sys.stdin)
+def w(n):
+    yield n
+    for c in n.get("nodes",[])+n.get("floating_nodes",[]): yield from w(c)
+for n in w(t):
+    if n.get("name")=="__i3_scratch":
+        for x in w(n):
+            if x.get("pid"):
+                print("%s\t%s (%s)" % (x["id"], x.get("name") or "?", x.get("app_id") or x.get("window_properties",{}).get("class","")))
+')
+[ -z "$list" ] && { notify-send "scratchpad" "empty" 2>/dev/null; exit 0; }
+choice=$(printf '%s\n' "$list" | cut -f2 | fuzzel --dmenu --width 70 --prompt 'scratchpad> ') || exit 0
+[ -z "$choice" ] && exit 0
+id=$(printf '%s\n' "$list" | awk -F'\t' -v c="$choice" '$2==c{print $1; exit}')
+[ -n "$id" ] && swaymsg "[con_id=$id] scratchpad show" >/dev/null

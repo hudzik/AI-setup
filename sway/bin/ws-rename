@@ -1,0 +1,23 @@
+#!/bin/bash
+# Version 1.1, 2026-11-25, dominik@hudzik.info
+# ws-rename: rename the focused workspace to "N: <dir name>", where dir = the folder open in the focused window
+# (foot: cwd of the nvim below it, else of its shell). Keeps the number, so Mod+N and ws-freeze are unaffected.
+# Same folder-name rule as ws-new: letters, digits and . _ / + @ % : = ~ - only.
+leaf() { # first nvim below the pid, else its first child (the shell), else the pid itself
+  local p=$1 n
+  n=$(pstree -p "$p" 2>/dev/null | grep -o 'nvim([0-9]*)' | head -1 | tr -dc 0-9)
+  [ -n "$n" ] && { echo "$n"; return; }
+  n=$(pgrep -P "$p" | head -1)
+  echo "${n:-$p}"
+}
+read -r app pid < <(swaymsg -t get_tree | jq -r '.. | objects | select(.focused==true) | "\(.app_id // "?") \(.pid)"' | head -1)
+[ "$app" = foot ] || { notify-send "ws-rename" "focused window is $app, not a terminal: no folder to use"; exit 1; }
+d=$(readlink "/proc/$(leaf "$pid")/cwd")
+[ -n "$d" ] || { notify-send "ws-rename" "cannot read the folder"; exit 1; }
+[ "$d" = "$HOME" ] && b=home || b=$(basename "$d")
+[[ $b =~ ^[A-Za-z0-9._+@%:=~-]+$ ]] || { notify-send "ws-rename" "folder name has characters that are not allowed: $b"; exit 1; }
+read -r num old < <(swaymsg -t get_workspaces | jq -r '.[] | select(.focused) | "\(.num) \(.name)"')
+[ "$num" -gt 0 ] 2>/dev/null || { notify-send "ws-rename" "this workspace has no number"; exit 1; }
+new="$num: $b"
+[ "$old" = "$new" ] || swaymsg "rename workspace \"$old\" to \"$new\"" >/dev/null
+notify-send "ws-rename" "$new"

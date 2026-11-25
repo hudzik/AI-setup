@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Version 1.1, 2026-11-25, dominik@hudzik.info
+# clip-sync: one clipboard in Sway (2026-11-23). Every text selection (primary) is copied to the clipboard,
+#   and every clipboard change to the primary, so Ctrl+V, Shift+Insert, middle-click and cliphist (Ctrl+Alt+V, which
+#   watches the clipboard) all see the same text.
+# Usage: clip-sync              start both watchers (exits if one already runs); started by `exec` in the Sway config
+#        clip-sync stop         stop them
+#        clip-sync _to clipboard|primary   internal: run by wl-paste --watch, content on stdin
+# Inputs: wl-paste/wl-copy (wl-clipboard 2.2.1). Outputs: log ~/.local/state/clip-sync.log, key=value, never content.
+# Invariants: text only (images stay in the clipboard only); empty or cleared selection ignored;
+#   a copy is skipped when the other side already holds the same bytes, which breaks the clipboard<->primary loop.
+set -u
+rt=${XDG_RUNTIME_DIR:-/tmp}
+pidf=$rt/clip-sync.pid
+log=${CLIP_SYNC_LOG:-$HOME/.local/state/clip-sync.log}
+self=$(readlink -f "$0")
+
+running_pid() {
+  local pid
+  pid=$(cat "$pidf" 2>/dev/null) || return 1
+  grep -q clip-sync "/proc/$pid/cmdline" 2>/dev/null && echo "$pid"
+}
+
+case "${1:-start}" in
+  _to)
+    target=${2:?}
+    [ "${CLIPBOARD_STATE:-data}" = data ] || exit 0
+    tmp=$(mktemp "$rt/clip-sync.XXXXXX") || exit 1
+    trap 'rm -f "$tmp"' EXIT
+    cat > "$tmp"
+    [ -s "$tmp" ] || exit 0
+    if [ "$target" = primary ]; then side=(-p); else side=(); fi
+    if wl-paste "${side[@]}" -n -t text 2>/dev/null | cmp -s - "$tmp"; then exit 0; fi
+    wl-copy "${side[@]}" < "$tmp"
+    echo "$(date +%FT%T) event=copy to=$target bytes=$(stat -c %s "$tmp")" >> "$log"
+    ;;
+  stop)
+    pid=$(running_pid) && kill "$pid"
+    exit 0
+    ;;
+  start)
+    if running_pid >/dev/null; then echo "event=already_running" >&2; exit 0; fi
+    mkdir -p "$(dirname "$log")"
+    echo $$ > "$pidf"
+    trap 'kill $(jobs -p) 2>/dev/null; rm -f "$pidf"; exit 0' TERM INT
+    wl-paste -p -t text --watch "$self" _to clipboard &
+    wl-paste -t text --watch "$self" _to primary &
+    echo "$(date +%FT%T) event=start pid=$$" >> "$log"
+    wait
+    ;;
+  *) echo "usage: clip-sync [stop]" >&2; exit 2 ;;
+esac

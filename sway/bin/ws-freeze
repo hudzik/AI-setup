@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+# Version 1.1, 2026-11-25, dominik@hudzik.info
+"""ws-freeze [N]: toggle freeze (SIGSTOP) / wake (SIGCONT) of the apps on a Sway workspace.
+Inputs: N = workspace number (default: focused). DRY=1 only prints what it would do.
+Frozen windows are dimmed (Sway opacity DIM over the gray background), woken ones get opacity 1.
+Frozen: the process tree of every window on that workspace, except terminals (foot) and
+except processes that also own a window on another workspace (they are skipped and named).
+State: $XDG_RUNTIME_DIR/ws-freeze-<N>.json = {pid: start_time}; a pid is woken only if its
+start time still matches (no signal to a recycled pid). Second press on the same workspace wakes.
+Created 2026-11-25, bound to Mod+Ctrl+z."""
+import json
+import os
+import signal
+import subprocess
+import sys
+from pathlib import Path
+
+SKIP_APPS = {"foot", "footclient"}
+RUN = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
+DRY = os.environ.get("DRY") == "1"
+DIM = "0.35"
+
+
+def swaymsg(*a):
+    return json.loads(subprocess.check_output(["swaymsg", "-r", *a]))
+
+
+def start_time(pid):
+    try:
+        return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[19]
+    except OSError:
+        return None
+
+
+def children_map():
+    m = {}
+    for d in os.listdir("/proc"):
+        if d.isdigit():
+            try:
+                ppid = int(Path(f"/proc/{d}/stat").read_text().rsplit(")", 1)[1].split()[1])
+            except OSError:
+                continue
+            m.setdefault(ppid, []).append(int(d))
+    return m
+
+
+def tree_of(pid, cm):
+    out, todo = [], [pid]
+    while todo:
+        p = todo.pop(0)
+        if p not in out:
+            out.append(p)
+            todo += cm.get(p, [])
+    return out  # parent first
+
+
+def windows(node, ws=None, acc=None):
+    acc = [] if acc is None else acc
+    if node.get("type") == "workspace":
+        ws = node.get("num")
+    if node.get("pid") and node.get("type") in ("con", "floating_con") and not node.get("nodes"):
+        app = node.get("app_id") or (node.get("window_properties") or {}).get("class") or "?"
+        acc.append((ws, node["pid"], app, node["id"]))
+    for k in ("nodes", "floating_nodes"):
+        for n in node.get(k, []):
+            windows(n, ws, acc)
+    return acc
+
+
+def notify(msg):
+    print(msg)
+    if not DRY:
+        subprocess.run(["notify-send", "-t", "4000", "ws-freeze", msg], check=False)
+
+
+def main():
+    if len(sys.argv) > 1:
+        num = int(sys.argv[1])
+    else:
+        num = next(w["num"] for w in swaymsg("-t", "get_workspaces") if w["focused"])
+    state = Path(RUN) / f"ws-freeze-{num}.json"
+
+    if state.exists():  # wake
+        data = json.loads(state.read_text())
+        frozen, cons = data.get("pids", data), data.get("cons", [])
+        if not DRY:
+            for con in cons:
+                subprocess.run(["swaymsg", f"[con_id={con}]", "opacity", "1"], capture_output=True, check=False)
+        woke = 0
+        for pid, st in frozen.items():
+            if start_time(int(pid)) == st:
+                if not DRY:
+                    os.kill(int(pid), signal.SIGCONT)
+                woke += 1
+        if not DRY:
+            state.unlink()
+        notify(f"workspace {num}: woke {woke} processes")
+        return
+
+    wins = windows(swaymsg("-t", "get_tree"))
+    cm = children_map()
+    elsewhere = set()
+    for ws, pid, _app, _con in wins:
+        if ws != num:
+            elsewhere |= set(tree_of(pid, cm))
+    me = {os.getpid(), os.getppid()}
+    frozen, apps, skipped, cons = {}, [], [], []
+    for ws, pid, app, con in wins:
+        if ws != num or app in SKIP_APPS:
+            continue
+        sub = tree_of(pid, cm)
+        if set(sub) & elsewhere:
+            skipped.append(app)
+            continue
+        apps.append(app)
+        cons.append(con)
+        for p in sub:
+            st = start_time(p)
+            if st and p not in me:
+                frozen[str(p)] = st
+    if not frozen:
+        notify(f"workspace {num}: nothing to freeze" + (f" (skipped, also on other workspaces: {', '.join(skipped)})" if skipped else ""))
+        return
+    if not DRY:
+        state.write_text(json.dumps({"pids": frozen, "cons": cons}))  # write first, so a crash mid-way can still be woken
+        for con in cons:  # dim before stopping, so the compositor redraws while the app still answers
+            subprocess.run(["swaymsg", f"[con_id={con}]", "opacity", DIM], capture_output=True, check=False)
+        for p in frozen:
+            try:
+                os.kill(int(p), signal.SIGSTOP)
+            except OSError:
+                pass
+    msg = f"workspace {num}: froze {', '.join(apps)} ({len(frozen)} processes); Mod+Ctrl+z again to wake"
+    if skipped:
+        msg += f"; skipped (also on other workspaces): {', '.join(skipped)}"
+    notify(msg)
+
+
+if __name__ == "__main__":
+    main()

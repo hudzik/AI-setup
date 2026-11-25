@@ -1,4 +1,4 @@
-# Version 1.0, 2026-10-30, dominik@hudzik.info
+# Version 1.1, 2026-11-25, dominik@hudzik.info
 # Sway config for a laptop with one external monitor (Debian 13, Sway 1.10).
 # Reload after edits: Mod+Shift+c.  Full reference: man 5 sway
 # Helper scripts live in ~/.local/bin (see ../bin). Sway's PATH has no ~/.local/bin, so every call uses the full path.
@@ -33,8 +33,6 @@ output eDP-1 mode 1920x1080@60Hz position 0 0
 bindswitch --locked lid:on output eDP-1 disable
 bindswitch --locked lid:off exec ~/.local/bin/sway-outputs
 exec_always ~/.local/bin/sway-outputs daemon
-# Freeze processes of windows on workspace 9 while it is hidden.
-exec_always ~/.local/bin/sway-freeze
 
 # Daily wallpaper from a folder (see bin/wallpaper-daily). No `output * bg ...` line here on purpose:
 # a reload would re-apply it and wipe today's picture, because the script sets one only once a day.
@@ -323,30 +321,34 @@ mode "blank" {
 ### Autostart (what XFCE started for you)
 exec /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1
 exec /usr/bin/gnome-keyring-daemon --start --components=secrets
-exec nm-applet --indicator
-exec blueman-applet
 exec mako
 # Clipboard history (replaces Clipman): text and images, picked with Ctrl+Alt+v
 exec wl-paste --type text --watch cliphist store
 exec wl-paste --type image --watch cliphist store
+# One clipboard: selections go to the clipboard and back, so cliphist sees them too
+exec ~/.local/bin/clip-sync
 # Screen sharing in Vivaldi/Firefox (xdg-desktop-portal-wlr) needs these.
 exec dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=sway
 exec systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
 
 ### Apps
 bindsym $mod+Return exec $term
-bindsym $mod+Shift+f exec firefox --new-window
 bindsym $mod+b exec ~/.local/bin/sway-launcher --exact
 bindsym $mod+v exec ~/.local/bin/sway-launcher --exact --recent
 bindsym $mod+n exec thunar
 # Wi-Fi: pick a network in a small floating terminal (nmtui)
 bindsym $mod+Shift+w exec $term --title=wifi sh -c "nmcli dev wifi rescan; sleep 3; nmtui-connect"
 for_window [title="^wifi$"] floating enable, resize set 700 500
-bindsym $mod+Shift+q kill
-# No confirmation. Ctrl+Shift+q is also Quit in Firefox/Chromium: the compositor takes it first.
-bindsym Ctrl+Shift+q exec ~/.local/bin/sway-close-others
-bindsym $mod+Shift+n exec ~/.local/bin/ws-new
-bindsym $mod+Shift+s exec ~/.local/bin/sway-save
+bindsym $mod+q kill
+# Close every window on this workspace, no confirmation
+bindsym $mod+Shift+q [workspace="__focused__"] kill
+bindsym $mod+Ctrl+q [workspace="__focused__"] kill
+bindsym $mod+Ctrl+n exec ~/.local/bin/ws-new
+bindsym $mod+Shift+n exec ~/.local/bin/ws-rename
+bindsym $mod+Ctrl+s exec ~/.local/bin/sway-save
+bindsym $mod+Shift+g exec ~/.local/bin/sway-save
+# Freeze / wake the apps of this workspace (terminals are skipped)
+bindsym $mod+Ctrl+z exec ~/.local/bin/ws-freeze
 bindsym Ctrl+Alt+l exec $lock
 bindsym Ctrl+Alt+v exec cliphist list | fuzzel --dmenu --width 70 | cliphist decode | wl-copy
 bindsym Ctrl+Alt+Shift+v exec cliphist list | fuzzel --dmenu --width 70 --prompt 'delete> ' | cliphist delete
@@ -367,8 +369,11 @@ bindsym XF86AudioNext exec playerctl next
 bindsym XF86AudioPrev exec playerctl previous
 
 ### Session
-bindsym $mod+Shift+c reload
+# Check the config with `sway -C` first, reload only if it is valid
+bindsym $mod+Shift+c exec ~/.local/bin/sway-reload
 bindsym $mod+Shift+e exec swaynag -t warning -m 'Log out of Sway?' -B 'Yes, log out' 'swaymsg exit'
+# Ctrl+Alt+F4: save the session, then power off at once, no question
+bindsym Ctrl+Alt+F4 exec ~/.local/bin/sway-poweroff
 floating_modifier $mod normal
 
 ### Moving around (vim keys, arrows also work)
@@ -423,9 +428,50 @@ bindsym $mod+Shift+7 move container to workspace number $ws7
 bindsym $mod+Shift+8 move container to workspace number $ws8
 bindsym $mod+Shift+9 move container to workspace number $ws9
 bindsym $mod+Shift+0 move container to workspace number $ws10
+# Number pad keys, Num Lock on (KP_n) or off / with Shift (KP_End ...)
+bindsym $mod+KP_1 workspace number $ws1; exec ~/.local/bin/ws-open 1
+bindsym $mod+KP_End workspace number $ws1; exec ~/.local/bin/ws-open 1
+bindsym $mod+Shift+KP_1 move container to workspace number $ws1
+bindsym $mod+Shift+KP_End move container to workspace number $ws1
+bindsym $mod+KP_2 workspace number $ws2; exec ~/.local/bin/ws-open 2
+bindsym $mod+KP_Down workspace number $ws2; exec ~/.local/bin/ws-open 2
+bindsym $mod+Shift+KP_2 move container to workspace number $ws2
+bindsym $mod+Shift+KP_Down move container to workspace number $ws2
+bindsym $mod+KP_3 workspace number $ws3; exec ~/.local/bin/ws-open 3
+bindsym $mod+KP_Next workspace number $ws3; exec ~/.local/bin/ws-open 3
+bindsym $mod+Shift+KP_3 move container to workspace number $ws3
+bindsym $mod+Shift+KP_Next move container to workspace number $ws3
+bindsym $mod+KP_4 workspace number $ws4; exec ~/.local/bin/ws-open 4
+bindsym $mod+KP_Left workspace number $ws4; exec ~/.local/bin/ws-open 4
+bindsym $mod+Shift+KP_4 move container to workspace number $ws4
+bindsym $mod+Shift+KP_Left move container to workspace number $ws4
+bindsym $mod+KP_5 workspace number $ws5; exec ~/.local/bin/ws-open 5
+bindsym $mod+KP_Begin workspace number $ws5; exec ~/.local/bin/ws-open 5
+bindsym $mod+Shift+KP_5 move container to workspace number $ws5
+bindsym $mod+Shift+KP_Begin move container to workspace number $ws5
+bindsym $mod+KP_6 workspace number $ws6; exec ~/.local/bin/ws-open 6
+bindsym $mod+KP_Right workspace number $ws6; exec ~/.local/bin/ws-open 6
+bindsym $mod+Shift+KP_6 move container to workspace number $ws6
+bindsym $mod+Shift+KP_Right move container to workspace number $ws6
+bindsym $mod+KP_7 workspace number $ws7; exec ~/.local/bin/ws-open 7
+bindsym $mod+KP_Home workspace number $ws7; exec ~/.local/bin/ws-open 7
+bindsym $mod+Shift+KP_7 move container to workspace number $ws7
+bindsym $mod+Shift+KP_Home move container to workspace number $ws7
+bindsym $mod+KP_8 workspace number $ws8; exec ~/.local/bin/ws-open 8
+bindsym $mod+KP_Up workspace number $ws8; exec ~/.local/bin/ws-open 8
+bindsym $mod+Shift+KP_8 move container to workspace number $ws8
+bindsym $mod+Shift+KP_Up move container to workspace number $ws8
+bindsym $mod+KP_9 workspace number $ws9; exec ~/.local/bin/ws-open 9
+bindsym $mod+KP_Prior workspace number $ws9; exec ~/.local/bin/ws-open 9
+bindsym $mod+Shift+KP_9 move container to workspace number $ws9
+bindsym $mod+Shift+KP_Prior move container to workspace number $ws9
+bindsym $mod+KP_0 workspace number $ws10; exec ~/.local/bin/ws-open 10
+bindsym $mod+KP_Insert workspace number $ws10; exec ~/.local/bin/ws-open 10
+bindsym $mod+Shift+KP_0 move container to workspace number $ws10
+bindsym $mod+Shift+KP_Insert move container to workspace number $ws10
+# Pressing the key of the current workspace again goes back
+workspace_auto_back_and_forth yes
 bindsym $mod+Tab workspace back_and_forth
-bindsym $mod+Ctrl+Left workspace prev
-bindsym $mod+Ctrl+Right workspace next
 exec ~/.local/bin/sway-mru daemon
 bindsym Mod1+Tab exec ~/.local/bin/sway-mru switch
 bindsym Mod1+Shift+Tab exec ~/.local/bin/sway-windows
@@ -456,6 +502,7 @@ for_window [app_id="pavucontrol"] floating enable
 ### Scratchpad: a hidden window you can pop up anywhere
 bindsym $mod+Shift+minus move scratchpad
 bindsym $mod+minus scratchpad show
+bindsym $mod+Ctrl+minus exec ~/.local/bin/sp-pick
 
 ### Resize mode (Mod+r, then h j k l, Esc to leave)
 mode "resize" {
@@ -482,5 +529,6 @@ exec ~/.local/bin/sway-startup
 bindsym $mod+x exec ~/.local/bin/sway-swap
 
 
-# autotiling: alternates split direction for new windows. `exec`, not exec_always: a reload would start a second copy.
-exec autotiling
+# tile-rule: windows 1-3 side by side, the 4th and later open below; also names workspaces after their folder.
+# `exec`, not exec_always: a reload would start a second copy.
+exec ~/.local/bin/tile-rule

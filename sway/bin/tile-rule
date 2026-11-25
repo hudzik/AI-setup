@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+# Version 1.1, 2026-11-25, dominik@hudzik.info
+"""tile-rule: replaces autotiling (2026-11-13: side by side, the 4th window opens below).
+
+Rule per workspace (tiled windows only, floating ones are not counted):
+  fewer than LIMIT windows  -> the focused window sits in a splith container, so the next window opens beside it
+  LIMIT or more windows     -> the focused window sits in a splitv container, so the next window opens below it
+With LIMIT = 3: windows 1, 2 and 3 are side by side (left, middle, right), window 4 and later open below.
+It only decides where the NEXT window opens. It never moves or re-arranges windows that are already open.
+Second job: every numbered workspace
+that holds a Claude Code session is renamed to "N: <folder of that session>" (the first claude process found under
+a foot window, in tree order; $HOME gives "home"). Workspaces without a session keep their name. The number stays
+first, so "workspace number N", ws-freeze and the key bindings keep working. Same rule as ws-new / ws-rename.
+Started from the Sway config with `exec` (not exec_always: a reload would start a second copy).
+Debug: tile-rule -d   (prints every decision to stderr).
+"""
+import os
+import re
+import sys
+import i3ipc
+
+LIMIT = 3
+SESSION = "claude"  # process name of the per-workspace session: change to "nvim" or whatever you run
+DEBUG = "-d" in sys.argv
+
+
+def log(*a):
+    if DEBUG:
+        print(*a, file=sys.stderr, flush=True)
+
+
+def tiled_leaves(con):
+    """Leaf windows under con, following tiled children only (floating_nodes are skipped)."""
+    if not con.nodes:
+        return [con] if con.type == "con" and (con.pid or con.app_id or con.window) else []
+    out = []
+    for c in con.nodes:
+        out.extend(tiled_leaves(c))
+    return out
+
+
+def decide(ipc):
+    tree = ipc.get_tree()
+    foc = tree.find_focused()
+    if foc is None or foc.type != "con":
+        return
+    ws = foc.workspace()
+    if ws is None or ws.name == "__i3_scratch":
+        return
+    par = foc.parent
+    if par is None or par.type == "floating_con" or foc.floating in ("auto_on", "user_on"):
+        return
+    if par.layout in ("stacked", "tabbed") or foc.fullscreen_mode:
+        return
+    n = len(tiled_leaves(ws))
+    want = "splith" if n < LIMIT else "splitv"
+    log("workspace", ws.name, "windows", n, "parent", par.layout, "want", want)
+    if par.layout != want:
+        ipc.command(want)
+        log("  ran", want)
+
+
+SAFE = re.compile(r"^[A-Za-z0-9._+@%=~-]+$")
+HOME = os.path.expanduser("~")
+
+
+def children_map():
+    kids = {}
+    for d in os.listdir("/proc"):
+        if not d.isdigit():
+            continue
+        try:
+            with open(f"/proc/{d}/stat") as f:
+                st = f.read()
+            ppid = int(st[st.rindex(")") + 2:].split()[1])
+            with open(f"/proc/{d}/comm") as f:
+                comm = f.read().strip()
+        except (OSError, ValueError):
+            continue
+        kids.setdefault(ppid, []).append((int(d), comm))
+    return kids
+
+
+def claude_dir(pid, kids):
+    """cwd of the first claude process below pid (breadth first), else None."""
+    todo = [pid]
+    while todo:
+        p = todo.pop(0)
+        for c, comm in kids.get(p, []):
+            if comm == SESSION:
+                try:
+                    return os.readlink(f"/proc/{c}/cwd")
+                except OSError:
+                    return None
+            todo.append(c)
+    return None
+
+
+def autoname(ipc):
+    kids = None
+    urgent = {w.name for w in ipc.get_workspaces() if w.urgent and not w.focused}  # no "*" on the workspace you are looking at
+    for ws in ipc.get_tree().workspaces():
+        if ws.num is None or ws.num < 1:
+            continue
+        d = None
+        for leaf in ws.leaves():
+            if leaf.app_id == "foot" and leaf.pid:
+                kids = kids or children_map()
+                d = claude_dir(leaf.pid, kids)
+                if d:
+                    break
+        if d:
+            b = "home" if d == HOME else os.path.basename(d.rstrip("/"))
+        else:  # no claude process found: keep the name's text, only the ":" / "*" mark may change
+            b = re.sub(r"^\d+[:*] ?", "", ws.name)
+            if b == ws.name:
+                continue
+        if not SAFE.match(b):
+            continue
+        # 2026-11-19: "*" instead of ":" while a window of the workspace is urgent (a session waits for input)
+        new = f"{ws.num}{'*' if ws.name in urgent else ':'} {b}"
+        if ws.name != new:
+            ipc.command(f'rename workspace "{ws.name}" to "{new}"')
+            log("renamed", ws.name, "->", new)
+
+
+def main():
+    ipc = i3ipc.Connection()
+
+    def on_event(conn, _e):
+        try:
+            decide(conn)
+        except Exception as ex:  # never die on a odd tree
+            log("error", repr(ex))
+
+    def on_change(conn, e):
+        on_event(conn, e)
+        try:
+            autoname(conn)
+        except Exception as ex:
+            log("autoname error", repr(ex))
+
+    try:
+        autoname(ipc)
+    except Exception as ex:
+        log("autoname error", repr(ex))
+    ipc.on("window::new", on_change)
+    ipc.on("window::close", on_change)
+    ipc.on("window::focus", on_change)
+    ipc.on("window::urgent", on_change)
+    ipc.on("workspace::urgent", on_change)
+    ipc.on("workspace::focus", on_change)
+    ipc.on("window::move", on_change)
+    ipc.on("workspace::focus", on_change)
+    ipc.main()
+
+
+if __name__ == "__main__":
+    main()

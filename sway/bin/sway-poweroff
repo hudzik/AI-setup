@@ -1,0 +1,7 @@
+#!/bin/bash
+# Version 1.1, 2026-11-25, dominik@hudzik.info
+# Ctrl+Alt+F4 (2026-11-11): save the open workspaces (sway-save), then power off at once.
+# Powers off even if the save fails. Sway's PATH has no ~/.local/bin, so set it here.
+export PATH="$HOME/.local/bin:$PATH"
+sway-save || notify-send "sway-poweroff" "save failed, powering off anyway"
+exec systemctl poweroff

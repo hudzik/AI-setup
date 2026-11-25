@@ -1,21 +1,83 @@
 #!/usr/bin/env python3
-# Version 1.0, 2026-10-30, dominik@hudzik.info
-# Flip horizontal/vertical for the focused window: toggles the nearest parent that holds 2+ windows
-# (a lone window in its own wrapper makes `layout toggle split` do nothing visible).
-import json, subprocess
-def sm(*a): return subprocess.run(["swaymsg", *a], capture_output=True, text=True).stdout
-tree = json.loads(sm("-t", "get_tree"))
-path = []
-def find(n, trail):
-    if n.get("focused"): return trail + [n]
-    for c in n.get("nodes", []) + n.get("floating_nodes", []):
-        r = find(c, trail + [n])
+# Version 1.1, 2026-11-25, dominik@hudzik.info
+"""sway-flip (Mod+e): flip side-by-side <-> one-above-the-other for the ACTIVE window and the PREVIOUSLY active one.
+2026-11-24: only the active and the previously active window move (the old version flipped the nearest
+container with 2+ windows, so it moved 2 or 3 windows depending on focus).
+Inputs: the Sway tree; focus order from sway-mru ($XDG_RUNTIME_DIR/sway-mru.json, newest first).
+Rule:
+  B = the most recently focused other tiled window on the same workspace.
+  If the smallest container holding both A and B holds no other window -> toggle that container (nothing else moves).
+  Else -> pair them: B is moved next to A in a new container with the opposite orientation; other windows close the gap.
+  No previous window on this workspace -> old behaviour (nearest container with 2+ windows).
+Floating or fullscreen focused window -> do nothing.
+"""
+import json, os, subprocess, sys
+
+DEBUG = "-d" in sys.argv
+MRU = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "sway-mru.json")
+
+def sm(cmd):
+    out = subprocess.run(["swaymsg", cmd], capture_output=True, text=True).stdout
+    if DEBUG: print("cmd=" + repr(cmd), "result=" + out.strip().replace("\n", " "), file=sys.stderr)
+    return out
+
+def tiled_leaves(n):
+    if not n.get("nodes"):
+        return [n["id"]] if n["type"] == "con" and n.get("pid") else []
+    return [i for c in n["nodes"] for i in tiled_leaves(c)]
+
+def path_to(n, cid, trail=()):
+    trail = trail + (n,)
+    if n["id"] == cid: return list(trail)
+    for c in n.get("nodes", []):
+        r = path_to(c, cid, trail)
         if r: return r
-path = find(tree, [])
-steps = None
-if path:
-    for up, anc in enumerate(reversed(path[:-1]), 1):
-        if anc["type"] == "workspace" or len(anc.get("nodes", [])) >= 2:
-            steps = up; break
-if steps:
+    return None
+
+tree = json.loads(subprocess.run(["swaymsg", "-t", "get_tree"], capture_output=True, text=True).stdout)
+
+def find_focused(n):
+    if n.get("focused"): return n
+    for c in n.get("nodes", []) + n.get("floating_nodes", []):
+        r = find_focused(c)
+        if r: return r
+
+foc = find_focused(tree)
+if not foc or foc["type"] != "con" or foc.get("fullscreen_mode"): sys.exit(0)
+pa = path_to(tree, foc["id"])
+if not pa: sys.exit(0)  # floating window: not in the tiled tree
+ws = next(n for n in pa if n["type"] == "workspace")
+pa = pa[pa.index(ws):]
+leaves = tiled_leaves(ws)
+try:
+    mru = json.load(open(MRU))
+except (OSError, ValueError):
+    mru = []
+b = next((i for i in mru if i != foc["id"] and i in leaves), None)
+if DEBUG: print(f"focused={foc['id']} previous={b} ws={ws['name']} leaves={leaves}", file=sys.stderr)
+
+def toggle_at(steps):  # toggle the container `steps` levels above the focused window, keep focus on it
     sm(";".join(["focus parent"] * (steps - 1) + ["layout toggle split"] + ["focus child"] * (steps - 1)))
+
+if b is None:  # old behaviour
+    for up, anc in enumerate(reversed(pa[:-1]), 1):
+        if anc["type"] == "workspace" or len(anc["nodes"]) >= 2:
+            toggle_at(up); break
+    sys.exit(0)
+
+pb = path_to(ws, b)
+k = 0
+while k < min(len(pa), len(pb)) and pa[k]["id"] == pb[k]["id"]: k += 1
+lca = pa[k - 1]
+if sorted(tiled_leaves(lca)) == sorted([foc["id"], b]):
+    toggle_at(len(pa) - k)  # only A and B live in this container
+    sys.exit(0)
+
+new = "splitv" if lca["layout"] == "splith" else "splith"
+b_first = leaves.index(b) < leaves.index(foc["id"])  # keep left/top order
+a = foc["id"]
+cmds = [f"[con_id={a}] mark --add _flip_a", f"[con_id={a}] {new}",
+        f"[con_id={b}] move container to mark _flip_a", f"[con_id={a}] unmark _flip_a"]
+if b_first: cmds.append(f"[con_id={b}] swap container with con_id {a}")
+cmds.append(f"[con_id={a}] focus")
+sm(";".join(cmds))

@@ -1,0 +1,15 @@
+#!/bin/bash
+# Version 1.1, 2026-11-25, dominik@hudzik.info
+# sway-reload (2026-11-16): validate the Sway config with `sway -C`, reload only if it is valid.
+# Inputs : optional config path as $1 (default: the live config). Output: notify-send message, exit 0 reloaded, 1 invalid.
+# Invariants: never reloads an invalid config; with DRYRUN=1 it validates only and never calls swaymsg.
+cfg=${1:-}
+if [ -n "$cfg" ]; then out=$(sway -C -c "$cfg" 2>&1); else out=$(sway -C 2>&1); fi
+rc=$?
+if [ "$rc" -ne 0 ]; then
+  notify-send -u critical "sway-reload" "config invalid, NOT reloaded: $(head -c 300 <<<"$out")" 2>/dev/null
+  echo "sway-reload: invalid (rc=$rc): $out" >&2
+  exit 1
+fi
+[ "${DRYRUN:-0}" = 1 ] && { echo "sway-reload: valid (dry run)"; exit 0; }
+swaymsg reload >/dev/null && notify-send "sway-reload" "reloaded" 2>/dev/null
