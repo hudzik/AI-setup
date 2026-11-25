@@ -1,0 +1,23 @@
+#!/bin/bash
+# Version 1.1, 2026-11-25, dominik@hudzik.info
+# cc-wait-hooks-add (2026-11-25): adds Claude Code hooks that call agent-wait, so the workspace gets "N* name"
+# only while the session waits for you (Stop, Notification) and "N: name" while it works (UserPromptSubmit,
+# PostToolUse, SessionEnd). Run it yourself once: it edits ~/.claude/settings.json. Backup and diff kept.
+set -eu
+s=$HOME/.claude/settings.json
+d=$(date +%F-%H%M%S)
+cp -p "$s" "$s.bak-$d"
+tmp=$(mktemp)
+jq --arg aw "$HOME/.local/bin/agent-wait" '
+  def add(ev; mode):
+    .hooks[ev] = ((.hooks[ev] // []) | map(select((.hooks[0].command // "") | startswith($aw) | not))
+      + [{"hooks": [{"type": "command", "command": ($aw + " " + mode), "timeout": 5}]}]);
+  add("Stop"; "on") | add("Notification"; "on")
+  | add("UserPromptSubmit"; "off") | add("PostToolUse"; "off") | add("SessionEnd"; "off")' "$s" > "$tmp"
+jq empty "$tmp"
+diff -u "$s.bak-$d" "$tmp" > "$s.diff-$d" || true
+cat "$tmp" > "$s"
+rm -f "$tmp"
+echo "backup: $s.bak-$d"
+echo "diff:   $s.diff-$d"
+jq -c '.hooks | keys' "$s"

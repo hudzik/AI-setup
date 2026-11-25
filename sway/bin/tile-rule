@@ -81,6 +81,19 @@ def children_map():
     return kids
 
 
+WAIT_DIR = os.path.join(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"), "agent-wait")
+
+
+def subtree(pid, kids):
+    """pid and all its descendants."""
+    out, todo = set(), [pid]
+    while todo:
+        p = todo.pop()
+        out.add(p)
+        todo.extend(c for c, _ in kids.get(p, []))
+    return out
+
+
 def claude_dir(pid, kids):
     """cwd of the first claude process below pid (breadth first), else None."""
     todo = [pid]
@@ -98,11 +111,21 @@ def claude_dir(pid, kids):
 
 def autoname(ipc):
     kids = None
-    urgent = {w.name for w in ipc.get_workspaces() if w.urgent and not w.focused}  # no "*" on the workspace you are looking at
+    # 2026-11-25: "*" only while a cc / op session on the workspace waits for you (state files from agent-wait),
+    # no longer from Sway urgency; still no "*" on the workspace you are looking at
+    try:
+        waiting_pids = {int(n) for n in os.listdir(WAIT_DIR) if n.isdigit()}
+    except OSError:
+        waiting_pids = set()
+    focused = {w.name for w in ipc.get_workspaces() if w.focused}
     for ws in ipc.get_tree().workspaces():
         if ws.num is None or ws.num < 1:
             continue
         d = None
+        waits = False
+        if waiting_pids and ws.name not in focused:
+            kids = kids or children_map()
+            waits = any(leaf.pid and subtree(leaf.pid, kids) & waiting_pids for leaf in ws.leaves())
         for leaf in ws.leaves():
             if leaf.app_id == "foot" and leaf.pid:
                 kids = kids or children_map()
@@ -117,8 +140,8 @@ def autoname(ipc):
                 continue
         if not SAFE.match(b):
             continue
-        # 2026-11-19: "*" instead of ":" while a window of the workspace is urgent (a session waits for input)
-        new = f"{ws.num}{'*' if ws.name in urgent else ':'} {b}"
+        # "*" instead of ":" while a session on the workspace waits for you
+        new = f"{ws.num}{'*' if waits else ':'} {b}"
         if ws.name != new:
             ipc.command(f'rename workspace "{ws.name}" to "{new}"')
             log("renamed", ws.name, "->", new)
@@ -148,6 +171,7 @@ def main():
     ipc.on("window::close", on_change)
     ipc.on("window::focus", on_change)
     ipc.on("window::urgent", on_change)
+    ipc.on("tick", on_change)  # 2026-11-25: agent-wait sends a tick when a session starts or stops waiting
     ipc.on("workspace::urgent", on_change)
     ipc.on("workspace::focus", on_change)
     ipc.on("window::move", on_change)

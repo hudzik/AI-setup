@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+# Version 1.1, 2026-11-25, dominik@hudzik.info
+"""op-wait-watch (2026-11-25): star on the workspace only while OpenCode waits for you.
+
+Purpose: OpenCode 2.4 plugins get no session events, so this daemon reads the event stream of the local
+OpenCode service (`opencode serve --service`, GET /api/event, basic auth user "opencode", password from
+~/.config/opencode/service.json, never printed) and calls ~/.local/bin/agent-wait for the matching TUI.
+Inputs:  events session.execution.started            -> off (working)
+         session.execution.succeeded|failed|interrupted -> on  (waits for you)
+         permission.asked -> on, permission.replied|rejected -> off
+Mapping: sessionID -> GET /api/session/<id> -> location.directory -> every `opencode` TUI process
+         (cmdline without "serve") whose cwd is that directory -> agent-wait on|off <pid>.
+Invariants: never exits on errors (reconnects every 5 s, also when the service restarts on another port);
+         logs key=value lines to ~/.local/state/op-wait-watch.log, never the password or message text.
+Run:     systemd user unit op-wait-watch.service (config/op-wait-watch.service).
+Tested:  with `opencode run` only, not yet with a live TUI session; the permission event shape is not tested.  Debug: op-wait-watch -d (log also to stderr).
+"""
+import base64
+import glob
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import urllib.request
+
+HOME = os.path.expanduser("~")
+SERVICE_JSON = f"{HOME}/.config/opencode/service.json"
+AGENT_WAIT = f"{HOME}/.local/bin/agent-wait"
+LOG = f"{HOME}/.local/state/op-wait-watch.log"
+DEBUG = "-d" in sys.argv
+ON = {"session.execution.succeeded", "session.execution.failed", "session.execution.interrupted", "permission.asked"}
+OFF = {"session.execution.started", "permission.replied", "permission.rejected"}
+
+
+def log(**kv):
+    line = time.strftime("%F %T ") + " ".join(f"{k}={v}" for k, v in kv.items())
+    try:
+        with open(LOG, "a") as f:
+            f.write(line + "\n")
+    except OSError:
+        pass
+    if DEBUG:
+        print(line, file=sys.stderr, flush=True)
+
+
+def service_port():
+    """Port of the `opencode serve --service` process, from /proc/net/tcp and its socket inodes."""
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            cmd = open(f"/proc/{pid}/cmdline", "rb").read().split(b"\0")
+        except OSError:
+            continue
+        if not (cmd and cmd[0].endswith(b"opencode") and b"serve" in cmd and b"--service" in cmd):
+            continue
+        inodes = set()
+        for fd in glob.glob(f"/proc/{pid}/fd/*"):
+            try:
+                m = re.match(r"socket:\[(\d+)\]", os.readlink(fd))
+            except OSError:
+                continue
+            if m:
+                inodes.add(m.group(1))
+        for row in open("/proc/net/tcp").read().splitlines()[1:]:
+            f = row.split()
+            if f[3] == "0A" and f[9] in inodes and f[1].startswith("0100007F:"):  # LISTEN on 127.0.0.1
+                return int(f[1].split(":")[1], 16)
+    return None
+
+
+def auth_header():
+    pw = json.load(open(SERVICE_JSON))["password"]
+    return "Basic " + base64.b64encode(f"opencode:{pw}".encode()).decode()
+
+
+def get_json(port, path, auth):
+    req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", headers={"Authorization": auth})
+    with urllib.request.urlopen(req, timeout=5) as r:
+        return json.load(r)
+
+
+def find_dir(obj):
+    """location.directory anywhere near the top of a session object."""
+    if isinstance(obj, dict):
+        loc = obj.get("location")
+        if isinstance(loc, dict) and isinstance(loc.get("directory"), str):
+            return loc["directory"]
+        for v in obj.values():
+            if isinstance(v, dict):
+                d = find_dir(v)
+                if d:
+                    return d
+    return None
+
+
+def tui_pids(directory):
+    out = []
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            if open(f"/proc/{pid}/comm").read().strip() != "opencode":
+                continue
+            cmd = open(f"/proc/{pid}/cmdline", "rb").read()
+            if b"serve" in cmd:
+                continue
+            if os.readlink(f"/proc/{pid}/cwd") == directory:
+                out.append(pid)
+        except OSError:
+            continue
+    return out
+
+
+def sway_env():
+    env = dict(os.environ)
+    if not env.get("SWAYSOCK"):
+        rt = env.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+        socks = sorted(glob.glob(f"{rt}/sway-ipc.*.sock"), key=os.path.getmtime)
+        if socks:
+            env["SWAYSOCK"] = socks[-1]
+    return env
+
+
+def run_once(dirs):
+    port = service_port()
+    if not port:
+        log(event="no_service")
+        return
+    auth = auth_header()
+    req = urllib.request.Request(f"http://127.0.0.1:{port}/api/event", headers={"Authorization": auth})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        log(event="connected", port=port)
+        for raw in r:
+            line = raw.decode("utf-8", "replace").strip()
+            if not line.startswith("data:"):
+                continue
+            try:
+                ev = json.loads(line[5:])
+            except ValueError:
+                continue
+            t = ev.get("type", "")
+            if t not in ON and t not in OFF:
+                continue
+            data = ev.get("data") or ev.get("properties") or {}
+            sid = data.get("sessionID") or data.get("sessionId")
+            if not sid:
+                log(event="no_session_id", type=t)
+                continue
+            if sid not in dirs:
+                try:
+                    dirs[sid] = find_dir(get_json(port, f"/api/session/{sid}", auth))
+                except Exception as ex:
+                    log(event="lookup_error", session=sid, err=type(ex).__name__)
+                    dirs[sid] = None
+            d = dirs[sid]
+            mode = "on" if t in ON else "off"
+            pids = tui_pids(d) if d else []
+            for pid in pids:
+                subprocess.run([AGENT_WAIT, mode, pid], env=sway_env(), stdin=subprocess.DEVNULL, timeout=5)
+            log(type=t, session=sid, dir=d, mode=mode, pids=",".join(pids) or "none")
+
+
+def main():
+    dirs = {}
+    while True:
+        try:
+            run_once(dirs)
+        except Exception as ex:
+            log(event="stream_error", err=type(ex).__name__)
+        time.sleep(5)
+
+
+if __name__ == "__main__":
+    main()

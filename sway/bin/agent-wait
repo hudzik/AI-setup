@@ -1,0 +1,37 @@
+#!/bin/bash
+# Version 1.1, 2026-11-25, dominik@hudzik.info
+# agent-wait (2026-11-25): star on the workspace only after Claude Code (cc) or OpenCode (op) stops working and waits for you
+# Purpose: mark a Claude Code (cc) or OpenCode (op) session as waiting for you, or as working again.
+# Usage:   agent-wait on|off [PID]
+#   on  = session stopped and waits (cc hooks Stop, Notification; op events session idle, permission asked)
+#   off = session works again (cc hooks UserPromptSubmit, PostToolUse, SessionEnd; op event session busy)
+#   PID = the agent process; without it the first ancestor named claude or opencode is used (cc hooks).
+# Output:  state file $XDG_RUNTIME_DIR/agent-wait/<PID> exists while waiting; then a Sway tick "agent-wait"
+#          tells tile-rule to rename workspaces ("N* name" = a session on it waits, "N: name" = not).
+# Invariant: always exits 0 and prints nothing to stdout, so it never disturbs the agent.
+dir=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/agent-wait
+mode=${1:-}
+pid=${2:-}
+[ -t 0 ] || cat >/dev/null 2>&1   # drain the hook's JSON on stdin
+if [ -z "$pid" ]; then
+  p=$PPID
+  while [ -n "$p" ] && [ "$p" -gt 1 ]; do
+    comm=$(cat "/proc/$p/comm" 2>/dev/null) || break
+    case $comm in claude|opencode|.opencode) pid=$p; break ;; esac
+    p=$(awk '{print $4}' "/proc/$p/stat" 2>/dev/null) || break
+  done
+fi
+[ -n "$pid" ] || exit 0
+mkdir -p "$dir" 2>/dev/null
+case $mode in
+  on) : > "$dir/$pid" ;;
+  off) rm -f "$dir/$pid" ;;
+  *) exit 0 ;;
+esac
+# drop files of agents that are gone
+for f in "$dir"/*; do
+  [ -e "$f" ] || continue
+  [ -d "/proc/${f##*/}" ] || rm -f "$f"
+done
+swaymsg -t send_tick agent-wait >/dev/null 2>&1
+exit 0

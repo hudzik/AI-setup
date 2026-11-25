@@ -1,0 +1,10 @@
+[Unit]
+Description=op-wait-watch: OpenCode session waits -> agent-wait (workspace star), 2026-11-25
+
+[Service]
+ExecStart=%h/.local/bin/op-wait-watch
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

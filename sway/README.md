@@ -1,12 +1,12 @@
-# My Sway setup: session restore, workspace history, a few small scripts
+# How I work with AI: a Sway desktop built for Claude Code and OpenCode
 
 **Version 1.1, 2026-11-25.** Author contact: dominik@hudzik.info
 
-Sharing the config and helper scripts I have built up on a laptop (Debian 13, Sway 1.10, one external monitor). Everything is plain bash or Python plus `swaymsg` and `jq`. Config and scripts are linked at the bottom. Take what is useful, tell me what you would do differently.
+This is how I work with AI coding agents every day: one project per workspace, an agent in a terminal on each, and a desktop that tells me which agent is waiting for me. Below are the config and helper scripts I have built up on a laptop (Debian 13, Sway 1.10, one external monitor). Everything is plain bash or Python plus `swaymsg` and `jq`. Config and scripts are linked at the bottom. Take what is useful, tell me what you would do differently.
 
 ## What it is built around
 
-Claude Code is my main tool and the whole setup is built around it. Each workspace is one project folder with Claude Code running inside Neovim (the claudecode.nvim plugin), in a foot terminal. In the shared scripts that launch line is plain `nvim`; swap in whatever you run. Browsers have fixed jobs:
+Claude Code is my main tool and the whole setup is built around it; OpenCode (with free models) runs on one workspace next to it. Each workspace is one project folder with Claude Code running inside Neovim (the claudecode.nvim plugin), in a foot terminal. In the shared scripts that launch line is plain `nvim`; swap in whatever you run. Browsers have fixed jobs:
 
 - **qutebrowser, one per workspace.** Every HTML page Claude Code makes for me (reports, question pages, mind maps) opens with `qb-here`, which walks the process tree from the terminal to its window and opens the page in the qutebrowser of that same workspace, with its own profile folder. Pages never land on the workspace I happen to be looking at.
 - **Firefox** shows a local low-code app that holds my CRM and my knowledge base.
@@ -16,14 +16,19 @@ Because of that, a session is a set of projects, each usually a terminal next to
 
 ## The workflow
 
-I keep one folder per workspace and want my layout back after a login. These do that:
+I keep one folder per workspace and want my layout back after a login, and I want to see at a glance which agent needs me. These do that:
 
 1. **Mod+1 ... 0** (or the numpad) switches workspace. If the workspace is empty, `ws-open` starts the apps saved for it (terminal in the right folder, browser, editor), in the saved columns and widths.
 2. **Mod+Ctrl+s** (`sway-save`) saves what is open now: folder, app kind, column and row, width in percent. It saves only the workspaces that have windows right now, so closing the ones you do not want before saving is how you pick a session. Ctrl+Alt+F4 saves and powers off.
 3. **Login** runs `ws-open all` from `sway-startup`, so the saved session comes back.
 4. **Mod+Ctrl+n** (`ws-new`) lists every workspace number you ever used, with the folder last used and the date (a `*` marks the open ones). Pick a number, confirm or change the folder, and it opens workspace "N: folder" with an editor in that folder. The history file is never pruned, so a workspace you used months ago is still on the list. **Mod+Shift+n** (`ws-rename`) renames the current workspace after the folder open in the focused window.
 5. **Mod+Ctrl+z freezes a workspace** (`ws-freeze`): SIGSTOP to the process trees behind the windows on the focused workspace, SIGCONT on the next press. Frozen windows are dimmed. Terminals and processes that also own windows on other workspaces are skipped. RAM stays used but the CPU does not. Good for a heavy browser on a laptop with 8 GB. **Read the warning below before you use it.**
-6. **`tile-rule` decides where a new window goes:** the first three windows on a workspace sit side by side, the fourth and later open below. It replaced `autotiling`, which kept splitting in directions I did not want. It also renames each workspace to "N: folder" after the folder of the session running in it (set `SESSION` at the top of the script to the process you run, `claude` by default).
+6. **A `*` shows which agent waits for me.** A workspace is named "3: myproject" while the agent on it works and "3* myproject" when it has stopped and waits for my input. With several agents running I see on the bar where I am needed, without clicking through. The workspace I am looking at never gets a star. How it works:
+   - `agent-wait on|off [PID]` keeps a small state file per agent while it waits and sends Sway a tick.
+   - **Claude Code:** hooks call it: `Stop` and `Notification` = waiting, `UserPromptSubmit`, `PostToolUse` and `SessionEnd` = working. `cc-wait-hooks-add` adds the hooks to `~/.claude/settings.json` (backup and diff first).
+   - **OpenCode:** its plugins get no session events in the version I use (2.4), so `op-wait-watch`, a small systemd user service, reads the event stream of the local OpenCode service (`/api/event`): execution started = working, succeeded / failed / interrupted or a permission question = waiting. It finds the terminal by the session's folder. I have tested it with `opencode run` only, not yet with a live TUI session.
+   - `tile-rule` reads the state files and renames the workspaces.
+7. **`tile-rule` decides where a new window goes:** the first three windows on a workspace sit side by side, the fourth and later open below. It replaced `autotiling`, which kept splitting in directions I did not want. It also renames each workspace to "N: folder" after the folder of the session running in it (set `SESSION` at the top of the script to the process you run, `claude` by default).
 
 Other things I use every day: Mod+x swaps the focused window with the next one, Mod+Shift+space floats a window at 70% x 70% centred (and back), Mod+e flips horizontal/vertical for the window you are in, Mod+Ctrl+minus picks a window from the scratchpad in fuzzel.
 
@@ -74,7 +79,10 @@ Mod is the Super key. I override some Sway defaults: Mod+b (was splith) and Mod+
 | `ws-rename` | renames the focused workspace to "N: folder" from the focused window |
 | `sway-startup` | login: restores the saved session |
 | `ws-freeze` | freezes / wakes the apps behind the focused workspace, terminals skipped |
-| `tile-rule` | three windows side by side, the fourth and later below |
+| `tile-rule` | three windows side by side, the fourth and later below; names workspaces after their folder, `*` while an agent waits |
+| `agent-wait` | marks an agent as waiting or working (called by hooks and by `op-wait-watch`) |
+| `cc-wait-hooks-add` | adds the Claude Code hooks that call `agent-wait` |
+| `op-wait-watch` | OpenCode: reads the local service's event stream, calls `agent-wait` (systemd user unit in `config/`) |
 | `qb-here` | opens a URL in the qutebrowser of the workspace the calling terminal sits on |
 | `sway-mru` | most-recently-used window switch (daemon follows focus events) |
 | `sway-windows` | fuzzel window picker with workspace number first |
